@@ -1,10 +1,11 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+from fastapi.responses import Response
 
-from app.database import get_db
-from app.models import Item
-from app.schemas import ItemCreate, ItemResponse
+from app.tools.read_supplier_attachments import (
+    download_buyer_attachment_by_tender_id_and_row_id,
+    read_buyer_attachments_table,
+)
 
 app = FastAPI(title="API")
 
@@ -22,15 +23,12 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/api/items", response_model=list[ItemResponse])
-def get_items(db: Session = Depends(get_db)):
-    return db.query(Item).all()
+@app.get("/api/tender/{tender_id}/buyer-attachments-table")
+def get_buyer_attachments_table(tender_id: str):
+    return read_buyer_attachments_table(tender_id)
 
 
-@app.post("/api/items", response_model=ItemResponse)
-def create_item(item: ItemCreate, db: Session = Depends(get_db)):
-    db_item = Item(**item.model_dump())
-    db.add(db_item)
-    db.commit()
-    db.refresh(db_item)
-    return db_item
+@app.get("/api/tender/{tender_id}/download-attachment/{row_id}")
+def download_attachment(tender_id: str, row_id: int):
+    content = download_buyer_attachment_by_tender_id_and_row_id(tender_id, row_id)
+    return Response(content=content, media_type="application/octet-stream")

@@ -6,11 +6,19 @@ Execute a specific investigation task on a tender, validating compliance and ide
 
 ## Tools
 
+### Tender Document Tools (Buyer Side)
 1. **get_plan**: Create detailed investigation plan for this specific validation
 2. **read_buyer_attachments_table**: Get complete list of tender documents
 3. **download_buyer_attachment**: Download relevant documents for analysis
-4. **read_buyer_attachment_doc**: Deep dive into document content
-5. **read_award**: Check award decisions and justifications
+4. **read_buyer_attachment_doc**: Deep dive into document content (requires start_page and end_page)
+
+### Award Analysis Tools (Award Side)
+5. **read_award_result**: Get award decision, all submitted bids, and winner details
+   - Returns: award act, award justifications, all bids (not just winner), winner provider details (RUT, razón social, sucursal)
+   - Use to: Compare all bids, verify winner identity, analyze award justifications
+6. **read_award_result_attachment_doc**: Extract text from award-related documents
+   - Similar to read_buyer_attachment_doc but for award documents
+   - Use to: Read award justifications, winner proposals, evaluation results
 
 ## Input
 
@@ -74,6 +82,25 @@ Process:
 2. Check for measurable parameters (quantities, standards, specs)
 3. If vague: Quote generic/ambiguous text as evidence
 4. confidence: 0.70-0.80 (more subjective)
+
+### Award-Stage Validation
+Task: "Verificar que ganador cumple requisitos técnicos exigidos"
+Process:
+1. Use read_award_result to get winner details and all bids
+2. Extract winner RUT and company name from provider_details
+3. Read award justifications to see if winner qualifications were verified
+4. Cross-check winner capabilities against tender requirements
+5. If mismatch: Document specific requirements not met
+6. confidence: 0.75-0.90 (requires interpretation of both tender and award docs)
+
+### Bid Pattern Analysis
+Task: "Detectar patrones de colusión en ofertas presentadas"
+Process:
+1. Use read_award_result to get ALL submitted bids (not just winner)
+2. Analyze bid prices for suspicious patterns (e.g., all within 1% of each other, suspiciously high losing bids)
+3. Check if multiple bidders have same address/contact info
+4. Look for identical technical proposals
+5. confidence: 0.60-0.85 (pattern recognition requires judgment)
 
 ## Output Format
 
@@ -139,6 +166,30 @@ Brief summary including:
 - validation_passed: false
 - findings: 2 anomalies (missing weight, missing formula)
 - confidence: 0.88 (clear structural requirement, objective check)
+
+## Example Investigation with Award Tools
+
+**Task**: H-20 "Verificar legitimidad del ganador y cumplimiento de requisitos"
+**Subtasks**:
+1. Verificar que ganador sea empresa legítima con RUT válido
+2. Verificar que ganador cumple requisitos de experiencia
+3. Verificar justificación de adjudicación
+
+**Investigation**:
+1. Called read_award_result(id="4831-19-LE20")
+2. Found 3 bids submitted (providers A, B, C)
+3. Winner: Provider A with RUT 76.XXX.XXX-X, Razón Social "Constructora ABC Ltda"
+4. Checked award_act section for justification ✓ Present
+5. Read award attachment (row_id=0) with read_award_result_attachment_doc
+6. Award justification states: "Cumple experiencia requerida" but no evidence provided ✗
+7. Cross-referenced with tender Bases: Require 5 projects > $100M
+8. Award doc shows only 2 projects listed, both < $50M ✗
+
+**Output**:
+- validation_passed: false
+- findings: 2 anomalies
+  1. "Insufficient Evidence of Experience Compliance" (confidence: 0.85)
+  2. "Award Justification Contradicts Documentary Evidence" (confidence: 0.90)
 
 Focus on building a clear, evidence-based case. Each finding should be defensible and specific.
 """

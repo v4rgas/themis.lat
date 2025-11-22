@@ -7,6 +7,10 @@ import uuid
 import asyncio
 from datetime import datetime
 from operator import add
+import os
+import glob
+import tempfile
+import logging
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -446,6 +450,62 @@ Please investigate this task systematically and report your findings.
             )
             return {"task_investigation_results": [error_result]}
 
+    def _cleanup_temp_files(self, tender_id: str):
+        """
+        Clean up temporary PDF files for this tender.
+
+        Removes files from the temporary directory that were downloaded during
+        this workflow execution. Only removes files associated with this tender
+        to avoid affecting concurrent workflows.
+
+        Args:
+            tender_id: Tender ID to identify files to clean up
+        """
+        if not tender_id:
+            return
+
+        try:
+            # Get the temporary directory path used by download_buyer_attachment
+            temp_dir = tempfile.gettempdir()
+            temp_subdir = os.path.join(temp_dir, "mercado_publico_attachments")
+
+            # Check if directory exists
+            if not os.path.exists(temp_subdir):
+                return
+
+            # Find files for this specific tender
+            # Files are named: {tender_id}_{row_id}_{file_name}
+            pattern = os.path.join(temp_subdir, f"{tender_id}_*")
+            tender_files = glob.glob(pattern)
+
+            deleted_count = 0
+            deleted_size = 0
+
+            for file_path in tender_files:
+                try:
+                    # Get file size before deletion
+                    file_size = os.path.getsize(file_path)
+
+                    # Delete the file
+                    os.remove(file_path)
+
+                    deleted_count += 1
+                    deleted_size += file_size
+
+                    logging.debug(f"Deleted temp file: {os.path.basename(file_path)} ({file_size} bytes)")
+
+                except Exception as e:
+                    logging.warning(f"Failed to delete temp file {file_path}: {e}")
+
+            if deleted_count > 0:
+                logging.info(f"Cleanup complete: Deleted {deleted_count} temp files ({deleted_size} bytes)")
+                print(f"Cleanup: Deleted {deleted_count} temp PDF files ({deleted_size / 1024:.1f} KB)")
+
+        except Exception as e:
+            # Don't raise - cleanup failures shouldn't break the workflow
+            logging.warning(f"Temp file cleanup failed: {e}")
+            print(f"Warning: Temp file cleanup failed: {e}")
+
     def _aggregate_results(self, state: WorkflowState) -> WorkflowState:
         """
         Aggregation node that collects all task investigation results.
@@ -494,6 +554,13 @@ Please investigate this task systematically and report your findings.
         self._send_log(session_id, f"Workflow complete. {failed_validations}/{total_investigated} validations failed.")
         print(f"\nWorkflow complete. {failed_validations}/{total_investigated} validations failed.")
         print(state["workflow_summary"])
+
+        # Clean up temporary PDF files for this tender
+        try:
+            self._cleanup_temp_files(state.get("tender_id"))
+        except Exception as e:
+            # Don't let cleanup errors affect the workflow result
+            logging.warning(f"Cleanup failed but workflow completed successfully: {e}")
 
         return state
 

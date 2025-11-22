@@ -6,6 +6,7 @@ from typing_extensions import TypedDict
 import uuid
 import asyncio
 from datetime import datetime
+from operator import add
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -282,17 +283,14 @@ Return the ranked tasks with rationale.
                 additional_context={}
             ))
 
-            # Extract ranked tasks
-            state["ranked_tasks"] = ranking_result.ranked_tasks[:5]  # Top 5
+            # Extract ranked tasks and convert to dictionaries
+            ranked_task_objects = ranking_result.ranked_tasks[:5]  # Top 5
+            state["ranked_tasks"] = [task.model_dump() for task in ranked_task_objects]
 
             self._send_log(session_id, f"Task ranking complete. Top {len(state['ranked_tasks'])} tasks selected.")
             print(f"Task ranking complete. Top {len(state['ranked_tasks'])} tasks selected.")
             for i, task in enumerate(state['ranked_tasks'], 1):
-                # Safely access task fields
-                task_id = task.get('id', 'unknown')
-                task_code = task.get('code', 'unknown')
-                task_name = task.get('name', 'unknown')
-                print(f"  {i}. Task {task_id} ({task_code}): {task_name[:50] if isinstance(task_name, str) else task_name}...")
+                print(f"  {i}. Task {task['id']} ({task['code']}): {task['name'][:50]}...")
 
         except Exception as e:
             self._send_log(session_id, f"Task ranking failed: {e}")
@@ -368,6 +366,8 @@ Return the ranked tasks with rationale.
 
             # Prepare message for investigation
             tender_context = inputs.get("tender_context")
+            task_id = task.get('id', 0)
+            task_code = task.get('code', 'Unknown')
             task_name = task.get('name', 'Unknown task')
             task_desc = task.get('desc', 'No description')
             task_where = task.get('where_to_look', 'Not specified')
@@ -436,10 +436,10 @@ Please investigate this task systematically and report your findings.
             self._send_log(session_id, f"Task {task['id']} investigation failed: {e}")
             print(f"Task {task['id']} investigation failed: {e}")
             # Return error result
-            return TaskInvestigationOutput(
-                task_id=task['id'],
-                task_code=task['code'],
-                task_name=task['name'],
+            error_result = TaskInvestigationOutput(
+                task_id=task.get('id', 0),
+                task_code=task.get('code', 'Unknown'),
+                task_name=task.get('name', 'Unknown task'),
                 validation_passed=False,
                 findings=[],
                 investigation_summary=f"Investigation failed: {str(e)}"

@@ -111,9 +111,26 @@ class WorkflowState(BaseModel):
 
 
 # Task-based Investigation schemas
+class RankedTask(BaseModel):
+    """A single investigation task with all required fields"""
+    id: int = Field(description="Task ID number")
+    code: str = Field(description="Task code (e.g., H-01, H-02)")
+    name: str = Field(description="Task name/title")
+    desc: str = Field(description="Detailed description of what to validate")
+    where_to_look: str = Field(description="Where to find relevant information")
+    severity: str = Field(description="Severity level (Crítico, Alto, Medio, Bajo)")
+    subtasks: List[str] = Field(description="List of specific subtasks to perform")
+
+
 class TaskRankingOutput(BaseModel):
     """Output from ranking investigation tasks"""
-    ranked_tasks: List[Dict[str, Any]] = Field(description="Top 5 tasks ranked by priority")
+    ranked_tasks: List[RankedTask] = Field(
+        description=(
+            "Top 5 tasks ranked by priority. Each task MUST include ALL fields from the input: "
+            "id, code, name, desc, where_to_look, severity, and subtasks. "
+            "Return the exact task data you received, just reordered by priority."
+        )
+    )
     ranking_rationale: str = Field(description="Explanation of ranking criteria and order")
 
 

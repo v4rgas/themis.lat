@@ -32,7 +32,7 @@ class PlanAgent:
 
     def __init__(
         self,
-        model_name: str = "claude-3-5-sonnet-20241022", #TODO change model
+        model_name: str = "claude-sonnet-4-5",
         temperature: float = 0.0,
     ):
         """

@@ -5,6 +5,7 @@ from typing import Annotated, List, Dict, Any, Optional
 from typing_extensions import TypedDict
 import uuid
 import asyncio
+import traceback
 from datetime import datetime
 from operator import add
 

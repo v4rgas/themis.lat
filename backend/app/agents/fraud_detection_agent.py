@@ -1,13 +1,13 @@
 """
 Fraud Detection Agent - Deep investigation of individual tenders for fraud indicators
 """
-import os
 from typing import Dict, Any
 
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 
+from app.config import settings
 from app.prompts import fraud_detection_agent
 from app.schemas import FraudDetectionInput, FraudDetectionOutput
 from app.tools.get_plan import get_plan
@@ -64,7 +64,7 @@ class FraudDetectionAgent:
             model=model_name,
             temperature=temperature,
             base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            api_key=settings.openrouter_api_key,
         )
 
         # Define comprehensive investigation tools

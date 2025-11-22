@@ -1,13 +1,13 @@
 """
 Ranking Agent - Ranks procurement tenders by fraud risk indicators
 """
-import os
 from typing import Dict, Any
 
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 
+from app.config import settings
 from app.prompts import ranking_agent
 from app.schemas import RankingInput, RankingOutput, TaskRankingOutput
 from app.tools.read_buyer_attachments_table import read_buyer_attachments_table
@@ -61,7 +61,7 @@ class RankingAgent:
             model=model_name,
             temperature=temperature,
             base_url="https://openrouter.ai/api/v1",
-            api_key=os.getenv("OPENROUTER_API_KEY"),
+            api_key=settings.openrouter_api_key,
         )
 
         # Define tools for risk assessment

@@ -1,0 +1,375 @@
+import requests
+from bs4 import BeautifulSoup
+from typing import Dict, Any, List, Optional
+import re
+from pydantic import BaseModel, Field
+from langchain.tools import tool
+
+
+def normalize_value(value: str) -> Optional[str]:
+    return None if value == "--" else value
+
+
+def extract_qs_from_award_page(html: str) -> str:
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    img_element = soup.find('input', {'id': 'imgAdjudicacion'})
+    if not img_element:
+        img_element = soup.find('a', {'id': 'imgAdjudicacion'})
+    if not img_element:
+        img_element = soup.find(id='imgAdjudicacion')
+    
+    if not img_element:
+        with open('debug_page.html', 'w', encoding='utf-8') as f:
+            f.write(html)
+        raise Exception("Could not find imgAdjudicacion element. Saved HTML to debug_page.html")
+    
+    href = img_element.get('href', '')
+    
+    match = re.search(r'qs=([^&"]+)', href)
+    if not match:
+        raise Exception("Could not extract qs parameter from href")
+    
+    return match.group(1)
+
+
+def fetch_award_modal_html(qs: str) -> str:
+    url = f"https://www.mercadopublico.cl/Procurement/Modules/RFB/StepsProcessAward/PreviewAwardAct.aspx?qs={qs}"
+    
+    response = requests.get(url, timeout=30.0)
+    response.raise_for_status()
+    return response.text
+
+
+def parse_attachments(soup: BeautifulSoup) -> List[Dict[str, str]]:
+    attachments = []
+    attachments_section = soup.find('span', string=lambda text: text and 'Anexos a la Adjudicación' in text)
+    
+    if attachments_section:
+        table = soup.find('table', id='DWNL_grdId')
+        if table:
+            rows = table.find_all('tr')[1:]
+            for row in rows:
+                cells = row.find_all('td')
+                if len(cells) >= 6:
+                    file_span = cells[1].find('span')
+                    type_span = cells[2].find('span')
+                    desc_span = cells[3].find('span')
+                    size_span = cells[4].find('span')
+                    date_span = cells[5].find('span')
+                    
+                    attachment = {
+                        'file': file_span.get_text(strip=True) if file_span else '',
+                        'type': type_span.get_text(strip=True) if type_span else '',
+                        'description': desc_span.get_text(strip=True) if desc_span else '',
+                        'size': size_span.get_text(strip=True) if size_span else '',
+                        'date': date_span.get_text(strip=True) if date_span else ''
+                    }
+                    attachments.append(attachment)
+            
+            parent_div = attachments_section.find_parent('div', style=lambda x: x and 'Width:100%' in x)
+            if parent_div:
+                parent_div.decompose()
+            else:
+                parent_div = attachments_section.find_parent('div')
+                if parent_div:
+                    parent_div.decompose()
+    
+    return attachments
+
+
+def parse_overview(soup: BeautifulSoup) -> Dict[str, Any]:
+    overview = {}
+    
+    award_act_marker = soup.find('span', id='lblAwardAct')
+    if not award_act_marker:
+        award_act_marker = soup.find('span', class_='cssLabelsData', string=lambda text: text and 'Acta Adjudicación' in text)
+    
+    if award_act_marker:
+        labels_data = award_act_marker.find_all_previous('span', class_='cssLabelsData')
+        labels_data.reverse()
+    else:
+        labels_data = soup.find_all('span', class_='cssLabelsData')
+    
+    for label_span in labels_data:
+        if label_span.get('id') == 'lblAwardAct':
+            break
+        key = label_span.get_text(strip=True)
+        if key == 'Acta Adjudicación':
+            break
+        parent_tr = label_span.find_parent('tr')
+        if parent_tr:
+            next_tr = parent_tr.find_next_sibling('tr')
+            if next_tr:
+                value_span = next_tr.find('span', class_='cssLabelsItemData')
+                if value_span:
+                    value = value_span.get_text(strip=True)
+                    overview[key] = normalize_value(value)
+    
+    return overview
+
+
+def parse_award_act(soup: BeautifulSoup) -> Dict[str, Dict[str, Any]]:
+    award_act = {}
+    
+    subtitle_tds = soup.find_all('td', class_='cssFwkLabelSubTitle')
+    for td in subtitle_tds:
+        subtitle_text = td.get_text(strip=True)
+        if subtitle_text and subtitle_text != 'Acta Adjudicación':
+            edit_table = td.find_next('table', class_='cssEditTable')
+            if edit_table:
+                subsection = {}
+                rows = edit_table.find_all('tr')
+                for row in rows:
+                    title_td = row.find('td', class_='cssDataTitle')
+                    if title_td:
+                        key_span = title_td.find('span', class_='cssLabelsData')
+                        if key_span:
+                            subkey = key_span.get_text(strip=True)
+                            value_td = row.find('td', class_='cssDataItem')
+                            if value_td:
+                                value_elem = value_td.find(class_='cssLabelsItemData')
+                                if value_elem:
+                                    value = value_elem.get_text(strip=True)
+                                    subsection[subkey] = normalize_value(value)
+                if subsection:
+                    award_act[subtitle_text] = subsection
+    
+    return award_act
+
+
+def extract_provider_url_from_onclick(onclick_attr: str) -> Optional[str]:
+    if not onclick_attr:
+        return None
+    match = re.search(r"openPopUpTitle\('([^']+)'", onclick_attr)
+    if match:
+        return match.group(1)
+    return None
+
+
+def fetch_provider_details(enc_param: str) -> Dict[str, Optional[str]]:
+    url = f"https://www.mercadopublico.cl/BID/Modules/PopUps/InformationProvider.aspx?enc={enc_param}"
+    
+    try:
+        response = requests.get(url, timeout=30.0)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        razon_social = None
+        rut = None
+        sucursal = None
+        
+        razon_social_span = soup.find('span', id='lblSocialReasonDesc')
+        if razon_social_span:
+            razon_social = razon_social_span.get_text(strip=True)
+        
+        rut_span = soup.find('span', id='lblRutDesc')
+        if rut_span:
+            rut = rut_span.get_text(strip=True)
+        
+        sucursal_span = soup.find('span', id='lblBranchDesc')
+        if sucursal_span:
+            sucursal = sucursal_span.get_text(strip=True)
+        
+        return {
+            'razon_social': razon_social,
+            'rut': rut,
+            'sucursal': sucursal
+        }
+    except Exception:
+        return {
+            'razon_social': None,
+            'rut': None,
+            'sucursal': None
+        }
+
+
+def parse_award_result(soup: BeautifulSoup) -> List[Dict[str, Any]]:
+    award_results = []
+    
+    main_table = soup.find('table', id='grdItemOC')
+    if not main_table:
+        return award_results
+    
+    item_tables = main_table.find_all('table', id=lambda x: x and 'rptBids_' in x)
+    
+    for item_table in item_tables:
+        item = {}
+        
+        parent_container = item_table.find_parent('td')
+        if not parent_container:
+            parent_container = item_table.find_parent('tr')
+        
+        number_span = item_table.find('span', id=lambda x: x and 'lblNumber' in x)
+        if number_span:
+            item['item_number'] = number_span.get_text(strip=True)
+        
+        onu_code_span = item_table.find('span', id=lambda x: x and 'lblCodeonu' in x)
+        if onu_code_span:
+            item['onu_code'] = onu_code_span.get_text(strip=True)
+        
+        schema_title_span = item_table.find('span', id=lambda x: x and 'LblSchemaTittle' in x)
+        if schema_title_span:
+            item['schema_title'] = schema_title_span.get_text(strip=True)
+        
+        description_span = item_table.find('span', id=lambda x: x and 'lblDescription' in x)
+        if description_span:
+            item['buyer_specifications'] = description_span.get_text(strip=True)
+        
+        quantity_span = item_table.find('span', id=lambda x: x and 'LblRBICuantityNumber' in x)
+        if quantity_span:
+            item['quantity'] = quantity_span.get_text(strip=True)
+        
+        bids_table = None
+        if parent_container:
+            bids_table = parent_container.find('table', id=lambda x: x and 'gvLines' in x)
+        
+        if not bids_table:
+            bids_table = item_table.find_next('table', id=lambda x: x and 'gvLines' in x)
+        
+        if bids_table:
+            bids = []
+            rows = bids_table.find_all('tr')
+            for row in rows:
+                if 'cssPRCGridViewRow' in row.get('class', []) or 'cssPRCGridViewAltRow' in row.get('class', []):
+                    cells = row.find_all('td')
+                    if len(cells) >= 6:
+                        provider_link = cells[0].find('a')
+                        provider_span = provider_link.find('span') if provider_link else None
+                        provider = provider_span.get_text(strip=True) if provider_span else ''
+                        
+                        supplier_comment_span = cells[1].find('span', id=lambda x: x and 'lblSupplierComment' in x)
+                        supplier_comment = supplier_comment_span.get_text(strip=True) if supplier_comment_span else ''
+                        
+                        symbol_span = cells[2].find('span', id=lambda x: x and 'lblSymbol' in x)
+                        price_span = cells[2].find('span', id=lambda x: x and 'lblTotalNetPrice' in x)
+                        unit_price = ''
+                        if symbol_span and price_span:
+                            unit_price = f"{symbol_span.get_text(strip=True)} {price_span.get_text(strip=True)}"
+                        
+                        quantity_awarded_span = cells[3].find('span', id=lambda x: x and 'txtAwardedQuantity' in x)
+                        quantity_awarded = quantity_awarded_span.get_text(strip=True) if quantity_awarded_span else ''
+                        
+                        total_awarded_span = cells[4].find('span', id=lambda x: x and 'lblTotalNetAward' in x)
+                        total_awarded = total_awarded_span.get_text(strip=True) if total_awarded_span else ''
+                        
+                        status_span = cells[5].find('span', id=lambda x: x and 'lblIsSelected' in x)
+                        status = status_span.get_text(strip=True) if status_span else ''
+                        
+                        bid = {
+                            'provider': provider,
+                            'supplier_specifications': supplier_comment,
+                            'unit_offer_amount': unit_price,
+                            'awarded_quantity': quantity_awarded,
+                            'total_net_awarded': total_awarded,
+                            'status': status
+                        }
+                        
+                        if status == 'Adjudicada' and provider_link:
+                            onclick_attr = provider_link.get('onclick', '')
+                            provider_url = extract_provider_url_from_onclick(onclick_attr)
+                            if provider_url:
+                                match = re.search(r'enc=([^&\'"]+)', provider_url)
+                                if match:
+                                    enc_param = match.group(1)
+                                    provider_details = fetch_provider_details(enc_param)
+                                    bid['provider_details'] = provider_details
+                        
+                        bids.append(bid)
+            
+            item['bids'] = bids
+        
+        total_line_span = None
+        if parent_container:
+            total_line_span = parent_container.find('span', id=lambda x: x and 'lblTotalLine' in x)
+        
+        if not total_line_span:
+            total_line_span = item_table.find_next('span', id=lambda x: x and 'lblTotalLine' in x)
+        
+        if total_line_span:
+            item['total_line_amount'] = total_line_span.get_text(strip=True)
+        
+        if item:
+            award_results.append(item)
+    
+    return award_results
+
+
+def parse_details(soup: BeautifulSoup) -> Dict[str, Any]:
+    details = {}
+    
+    acquisition_number_span = soup.find('span', id='lblTitlePorcNumberDesc')
+    if acquisition_number_span:
+        details['acquisition_number'] = acquisition_number_span.get_text(strip=True)
+    
+    award_date_span = soup.find('span', id='lblTitlePorcDateDesc')
+    if award_date_span:
+        details['award_informed_date'] = award_date_span.get_text(strip=True)
+    
+    return details
+
+
+class ReadAwardInput(BaseModel):
+    id: str = Field(
+        description="The tender/acquisition ID from Mercado Público to retrieve award information for"
+    )
+
+
+@tool(args_schema=ReadAwardInput)
+def read_award(id: str) -> Dict[str, Any]:
+    """Retrieve complete award information for a tender from Mercado Público.
+
+    This tool fetches and parses detailed award data including attachments, overview, 
+    award act details, bid results with provider details, and acquisition metadata from 
+    the Chilean public procurement platform.
+
+    Use this tool when you need to:
+    - Get comprehensive award details for a specific tender
+    - Analyze winning bids and awarded quantities
+    - Extract awarded provider details (razón social, rut, sucursal)
+    - Review award attachments and documentation
+    - Extract procurement act details and resolutions
+
+    Args:
+        id: The tender/acquisition ID from Mercado Público (e.g., "4074-24-LE19")
+
+    Returns:
+        dict: A dictionary containing:
+            - attachments: List of attached documents with metadata (file, type, description, size, date)
+            - overview: Award act overview (vistos, considerando, resuelvo)
+            - award_act: Structured award act details (buyer, contact, acquisition data)
+            - award_result: Detailed bid information per item with all bids. For awarded bids 
+              (status='Adjudicada'), includes provider_details with razón social, rut, and sucursal
+            - details: Acquisition number and award informed date
+    """
+    BASE_URL = "https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=<ID>"
+    url = BASE_URL.replace("<ID>", id)
+    
+    response = requests.get(url, timeout=30.0)
+    response.raise_for_status()
+    main_html = response.text
+    
+    qs = extract_qs_from_award_page(main_html)
+    modal_html = fetch_award_modal_html(qs)
+    
+    soup = BeautifulSoup(modal_html, 'html.parser')
+    div_content = soup.find('div', id='divContent')
+    
+    if not div_content:
+        raise Exception("Could not find divContent in modal HTML")
+    
+    content_soup = BeautifulSoup(str(div_content), 'html.parser')
+    
+    attachments = parse_attachments(content_soup)
+    overview = parse_overview(content_soup)
+    award_act = parse_award_act(content_soup)
+    award_result = parse_award_result(content_soup)
+    details = parse_details(content_soup)
+    
+    return {
+        'attachments': attachments,
+        'overview': overview,
+        'award_act': award_act,
+        'award_result': award_result,
+        'details': details
+    }

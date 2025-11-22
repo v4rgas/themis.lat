@@ -6,7 +6,7 @@ from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 from langchain_anthropic import ChatAnthropic
 from langchain.agents import create_agent
-from langchain.agents.structured_output import ProviderStrategy
+from langchain.agents.structured_output import ToolStrategy
 
 from app.prompts import simple_agent
 from app.tools.get_plan import get_plan
@@ -76,7 +76,7 @@ class SimpleAgent:
             model=model,
             tools=tools,
             system_prompt=simple_agent.SYS_PROMPT,
-            response_format=ProviderStrategy(AnomalyOutput)
+            response_format=ToolStrategy(AnomalyOutput)
         )
 
     def run(self, message: str) -> AnomalyOutput:

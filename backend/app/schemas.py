@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.utils.get_tender import TenderResponse
 
 
 class ItemCreate(BaseModel):
@@ -86,8 +89,39 @@ class FraudDetectionOutput(BaseModel):
 
 class WorkflowState(BaseModel):
     """State management for LangGraph workflow"""
+    # Input
+    tender_id: str | None = None
+
+    # Fetched tender data
+    tender_response: Any = None  # TenderResponse from get_tender()
+    tender_documents: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Processed input for ranking
     input_data: RankingInput | None = None
+
+    # Ranking results
     ranked_items: List[RankedItem] = Field(default_factory=list)
+
+    # Investigation results
     investigation_results: List[FraudDetectionOutput] = Field(default_factory=list)
     final_fraud_cases: List[FraudDetectionOutput] = Field(default_factory=list)
+
+    # Error tracking
     errors: List[str] = Field(default_factory=list)
+
+
+# Task-based Investigation schemas
+class TaskRankingOutput(BaseModel):
+    """Output from ranking investigation tasks"""
+    ranked_tasks: List[Dict[str, Any]] = Field(description="Top 5 tasks ranked by priority")
+    ranking_rationale: str = Field(description="Explanation of ranking criteria and order")
+
+
+class TaskInvestigationOutput(BaseModel):
+    """Output from investigating a single task"""
+    task_id: int = Field(description="Task ID")
+    task_code: str = Field(description="Task code (H-01, H-02, etc.)")
+    task_name: str = Field(description="Task name/description")
+    validation_passed: bool = Field(description="Whether the task validation passed")
+    findings: List[Anomaly] = Field(description="Anomalies/issues found during investigation")
+    investigation_summary: str = Field(description="Summary of the investigation")

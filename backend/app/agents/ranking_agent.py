@@ -8,8 +8,7 @@ from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 
 from app.prompts import ranking_agent
-from app.schemas import RankingInput, RankingOutput
-from app.tools.get_plan import get_plan
+from app.schemas import RankingInput, RankingOutput, TaskRankingOutput
 from app.tools.read_buyer_attachments_table import read_buyer_attachments_table
 from app.tools.download_buyer_attachment import download_buyer_attachment
 from app.tools.read_buyer_attachment_doc import read_buyer_attachment_doc
@@ -23,7 +22,6 @@ class RankingAgent:
     a ranked list of the top 5 most suspicious cases for deep investigation.
 
     Available tools:
-    - get_plan: Creates risk assessment plans
     - read_buyer_attachments_table: Lists tender documents
     - download_buyer_attachment: Downloads specific attachments
     - read_buyer_attachment_doc: Analyzes document content
@@ -65,7 +63,6 @@ class RankingAgent:
 
         # Define tools for risk assessment
         tools = [
-            get_plan,
             read_buyer_attachments_table,
             download_buyer_attachment,
             read_buyer_attachment_doc
@@ -76,10 +73,10 @@ class RankingAgent:
             model=model,
             tools=tools,
             system_prompt=ranking_agent.SYS_PROMPT,
-            response_format=ToolStrategy(RankingOutput)
+            response_format=ToolStrategy(TaskRankingOutput)
         )
 
-    def run(self, input_data: RankingInput) -> RankingOutput:
+    def run(self, input_data: RankingInput) -> TaskRankingOutput:
         """
         Analyze tender context and rank items by fraud risk.
 

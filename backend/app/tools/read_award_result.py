@@ -49,7 +49,7 @@ def parse_attachments(soup: BeautifulSoup) -> List[Dict[str, str]]:
         table = soup.find('table', id='DWNL_grdId')
         if table:
             rows = table.find_all('tr')[1:]
-            for row in rows:
+            for row_id, row in enumerate(rows):
                 cells = row.find_all('td')
                 if len(cells) >= 6:
                     file_span = cells[1].find('span')
@@ -59,6 +59,7 @@ def parse_attachments(soup: BeautifulSoup) -> List[Dict[str, str]]:
                     date_span = cells[5].find('span')
                     
                     attachment = {
+                        'row_id': row_id,
                         'file': file_span.get_text(strip=True) if file_span else '',
                         'type': type_span.get_text(strip=True) if type_span else '',
                         'description': desc_span.get_text(strip=True) if desc_span else '',
@@ -309,6 +310,33 @@ def parse_details(soup: BeautifulSoup) -> Dict[str, Any]:
     return details
 
 
+def extract_viewstate_params(soup: BeautifulSoup) -> Dict[str, str]:
+    params = {}
+    viewstate = soup.find("input", {"id": "__VIEWSTATE"})
+    if viewstate:
+        params["__VIEWSTATE"] = str(viewstate.get("value", ""))
+    viewstategenerator = soup.find("input", {"id": "__VIEWSTATEGENERATOR"})
+    if viewstategenerator:
+        params["__VIEWSTATEGENERATOR"] = str(viewstategenerator.get("value", ""))
+    return params
+
+
+def download_award_attachment_by_row_id(qs: str, soup: BeautifulSoup, row_id: int) -> bytes:
+    html_id = str(row_id + 2).zfill(2)
+    params = {
+        "__EVENTTARGET": "",
+        "__EVENTARGUMENT": "",
+        **extract_viewstate_params(soup),
+        f"DWNL$grdId$ctl{html_id}$search.x": "30",
+        f"DWNL$grdId$ctl{html_id}$search.y": "35",
+        "DWNL$ctl10": "",
+    }
+    url = f"https://www.mercadopublico.cl/Procurement/Modules/RFB/StepsProcessAward/PreviewAwardAct.aspx?qs={qs}"
+    response = requests.post(url, data=params, timeout=30.0)
+    response.raise_for_status()
+    return response.content
+
+
 class ReadAwardInput(BaseModel):
     id: str = Field(
         description="The tender/acquisition ID from Mercado Público to retrieve award information for"
@@ -336,7 +364,8 @@ def read_award_result(id: str) -> Dict[str, Any]:
     Returns:
         dict: A dictionary containing:
             - ok: Boolean indicating if award information is available
-            - attachments: List of attached documents with metadata (file, type, description, size, date)
+            - attachments: List of attached documents with metadata (row_id, file, type, description, size, date).
+              Use row_id with read_award_result_attachment tool to download the actual file bytes
             - overview: Award act overview (vistos, considerando, resuelvo)
             - award_act: Structured award act details (buyer, contact, acquisition data)
             - award_result: Detailed bid information per item with all bids. For awarded bids 

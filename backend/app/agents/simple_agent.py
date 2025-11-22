@@ -1,5 +1,5 @@
 """
-Simple Agent - Basic conversational agent using LangChain v1 API
+Simple Agent - Procurement fraud investigation agent using LangChain v1 API
 """
 from typing import Dict, Any, List
 
@@ -9,6 +9,10 @@ from langchain.agents import create_agent
 from langchain.agents.structured_output import ProviderStrategy
 
 from app.prompts import simple_agent
+from app.tools.get_plan import get_plan
+from app.tools.read_buyer_attachments_table import read_buyer_attachments_table
+from app.tools.download_buyer_attachment import download_buyer_attachment
+from app.tools.read_buyer_attachment_doc import read_buyer_attachment_doc
 
 
 class AnomalyOutput(BaseModel):
@@ -20,15 +24,22 @@ class AnomalyOutput(BaseModel):
 
 class SimpleAgent:
     """
-    A simple conversational agent using LangChain v1's create_agent API.
+    Procurement fraud investigation agent using LangChain v1's create_agent API.
 
-    This agent provides basic question-answering and task execution without
-    structured outputs or complex tool usage.
+    This agent investigates flagged public procurement tenders from Mercado Público (Chile).
+    It uses specialized tools to analyze tender documents and identify anomalies that may
+    indicate fraud or corruption.
+
+    Available tools:
+    - get_plan: Creates investigation plans
+    - read_buyer_attachments_table: Lists tender documents
+    - download_buyer_attachment: Downloads specific attachments
+    - read_buyer_attachment_doc: Extracts text from PDF documents
 
     Usage:
         agent = SimpleAgent()
-        response = agent.run("What is FastAPI?")
-        print(response)  # "FastAPI is a modern Python web framework..."
+        response = agent.run("Investigate tender 1234-56-LR22: single bidder, 3-day publication, IT services")
+        print(response.anomalies)  # ['Overly specific technical requirements...', ...]
     """
 
     def __init__(
@@ -37,12 +48,11 @@ class SimpleAgent:
         temperature: float = 0.7,
     ):
         """
-        Initialize the Simple Agent using LangChain v1 create_agent API.
+        Initialize the Procurement Fraud Investigation Agent using LangChain v1 create_agent API.
 
         Args:
             model_name: Anthropic model to use
-            temperature: Temperature for model responses (0.0-1.0)
-            system_prompt: Optional custom system prompt. If None, uses default.
+            temperature: Temperature for model responses (0.0-1.0, recommend 0.7 for balanced analysis)
         """
         self.model_name = model_name
         self.temperature = temperature
@@ -53,29 +63,46 @@ class SimpleAgent:
             temperature=temperature,
         )
 
-        # Create simple agent with structured output for anomaly detection
+        # Define investigation tools
+        tools = [
+            get_plan,
+            read_buyer_attachments_table,
+            download_buyer_attachment,
+            read_buyer_attachment_doc
+        ]
+
+        # Create investigation agent with structured output for anomaly detection
         self.agent = create_agent(
             model=model,
-            tools=[],  # No tools for simple agent
+            tools=tools,
             system_prompt=simple_agent.SYS_PROMPT,
             response_format=ProviderStrategy(AnomalyOutput)
         )
 
     def run(self, message: str) -> AnomalyOutput:
         """
-        Process a user message and return detected anomalies.
+        Investigate a flagged tender and return detected anomalies.
+
+        The agent will:
+        1. Create an investigation plan using get_plan
+        2. List available tender documents
+        3. Analyze document contents for fraud indicators
+        4. Return structured list of anomalies with evidence
 
         Args:
-            message: The user's question or request
+            message: Tender description including ID and initial red flags
+                    Format: "Investigate tender [ID]: [red flags], [tender type/category]"
 
         Returns:
             AnomalyOutput: Structured output with list of detected anomalies
 
         Example:
             >>> agent = SimpleAgent()
-            >>> response = agent.run("Analyze tender with single bidder and 3-day publication")
+            >>> response = agent.run("Investigate tender 1234-56-LR22: single bidder, 3-day publication, IT services")
             >>> print(response.anomalies)
-            ['Single bidder detected', 'Publication period too short (3 days)']
+            ['Technical specifications require exact model ABC-2000, eliminating alternatives',
+             'Publication period of 3 days violates legal minimum of 20 days for LR category',
+             'Evaluation criteria awards 50% to proprietary certification only available from one supplier']
         """
         result = self.agent.invoke({
             "messages": [{"role": "user", "content": message}]

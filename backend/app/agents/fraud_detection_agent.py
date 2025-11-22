@@ -15,6 +15,7 @@ from app.tools.read_buyer_attachments_table import read_buyer_attachments_table
 from app.tools.download_buyer_attachment import download_buyer_attachment
 from app.tools.read_buyer_attachment_doc import read_buyer_attachment_doc
 from app.tools.read_award_result import read_award_result
+from app.tools.read_award_result_attachment_doc import read_award_result_attachment_doc
 
 
 class FraudDetectionAgent:
@@ -73,7 +74,8 @@ class FraudDetectionAgent:
             read_buyer_attachments_table,
             download_buyer_attachment,
             read_buyer_attachment_doc,
-            read_award_result
+            read_award_result,
+            read_award_result_attachment_doc
         ]
 
         # Create fraud detection agent with structured output

@@ -23,8 +23,10 @@ Prioritize tasks based on:
 
 ### 1. **Document Availability** (Most Important)
 - Can we actually perform this validation with available documents?
+- Consider BOTH tender documents AND award documents (if tender is awarded)
 - If the task requires "Bases Técnicas" but we don't have them, lower priority
 - If we have the exact documents needed, higher priority
+- **NEW**: Award documents expand investigation possibilities (winner verification, bid analysis)
 
 ### 2. **Severity Level**
 - Crítico > Alto > Medio > Bajo
@@ -42,6 +44,14 @@ Prioritize tasks based on:
 - Tasks that can be validated quickly with high confidence
 - Simple presence/absence checks before complex analysis
 
+### 6. **Award Documentation Quality** (NEW - Expanded Data Cube)
+When tender has been awarded, prioritize tasks that can leverage award-side data:
+- **Winner Legitimacy**: Can we verify provider identity (RUT, razón social)?
+- **Bid Pattern Analysis**: Can we compare all submitted bids for collusion indicators?
+- **Requirement Compliance**: Can we cross-check winner against stated requirements?
+- **Justification Audit**: Is there a complete award act with justifications to review?
+- Higher priority if award documentation is complete and accessible
+
 ## Output Requirements
 
 Return the TOP 5 tasks ranked by priority. For each task, provide:
@@ -55,12 +65,25 @@ Also provide a `ranking_rationale` explaining:
 
 ## Example Reasoning
 
+### Example 1: Tender Not Yet Awarded
 ```
 Task H-01 (Bases diferenciadas) ranked #1:
 - Severity: Crítico
 - We have access to tender documents listing
 - This is a foundational validation - if basic structure is wrong, many other issues likely
 - Quick to validate by checking document names/sections
+```
+
+### Example 2: Awarded Tender (NEW - With Award Data)
+```
+Task H-20 (Verificar legitimidad del ganador) ranked #2:
+- Severity: Alto
+- Tender HAS been awarded - award result available
+- Can verify winner RUT, razón social, and company legitimacy
+- Can cross-check winner against tender requirements
+- Award documentation is complete (award act + 3 attachments)
+- High fraud detection value - shell companies are common fraud pattern
+- NOTE: Ranked higher due to availability of award data (expanded data cube)
 ```
 
 ## Important Notes

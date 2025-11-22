@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef } from 'react'
 import './Detail.css'
+import { endpoints } from '../config/api'
 
 interface LogEvent {
   type: 'log'
@@ -46,7 +47,7 @@ export function Detail() {
       wsRef.current.close()
     }
 
-    const ws = new WebSocket(`ws://localhost:8001/api/ws/${sessionId}`)
+    const ws = new WebSocket(endpoints.ws(sessionId))
 
     ws.onopen = () => {
       console.log('WebSocket connected')
@@ -75,7 +76,7 @@ export function Detail() {
     setLogs([])
 
     try {
-      const response = await fetch('http://localhost:8001/api/investigate', {
+      const response = await fetch(endpoints.investigate, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

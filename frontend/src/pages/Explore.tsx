@@ -204,6 +204,10 @@ export function Explore() {
                 {
                   name: "High Daily Award Rate",
                   predicate: "MontoLineaAdjudica/date_diff('day', first_activity_date, FechaAdjudicacion)>1000000"
+                },
+                {
+                  name: "High Daily Award Rate (from Publication)",
+                  predicate: "MontoLineaAdjudica/date_diff('day', FechaPublicacion, FechaAdjudicacion)>1000000"
                 }
               ]
             }

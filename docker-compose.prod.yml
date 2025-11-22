@@ -13,10 +13,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: https://api.themis.lat
     ports:
       - "3000:3000"
-    environment:
-      VITE_API_URL: http://localhost:8001
     depends_on:
       - backend
     restart: unless-stopped

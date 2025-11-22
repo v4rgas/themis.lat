@@ -56,3 +56,4 @@ htmlcov/
 *jsonl
 *csv
 *.parquet
+*env

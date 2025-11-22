@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { EmbeddingAtlas } from "embedding-atlas/react"
 import { Coordinator, wasmConnector } from '@uwdata/vgplot'
 import { loadParquet } from '@uwdata/mosaic-sql'
@@ -6,9 +7,13 @@ import { useTheme } from '../context/ThemeContext'
 
 export function Explore() {
   const { theme } = useTheme()
+  const navigate = useNavigate()
   const [coordinator, setCoordinator] = useState<Coordinator | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedData, setSelectedData] = useState<any[] | null>(null)
+  const [selectionPredicate, setSelectionPredicate] = useState<string | null>(null)
+
 
   useEffect(() => {
     async function init() {
@@ -76,8 +81,95 @@ export function Explore() {
     return <div className="app">Failed to initialize coordinator</div>
   }
 
+  const handleViewDetails = () => {
+    if (selectedData && selectedData.length === 1) {
+      // Navigate to detail page with the selected node data
+      navigate('/detail', { state: { nodeData: selectedData[0] } })
+    }
+  }
+
   return (
     <div className="app">
+      {selectedData && selectedData.length === 1 && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          zIndex: 1000,
+          background: 'var(--bg-secondary)',
+          padding: '20px 24px',
+          borderRadius: '12px',
+          boxShadow: `0 8px 32px var(--shadow-color)`,
+          backdropFilter: 'blur(10px)',
+          border: '1px solid var(--shadow-color)',
+          minWidth: '280px',
+          animation: 'slideIn 0.3s ease-out',
+          fontFamily: 'system-ui, -apple-system, sans-serif'
+        }}>
+          <div style={{
+            fontSize: '13px',
+            color: 'var(--text-secondary)',
+            marginBottom: '8px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            fontWeight: '600',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+          }}>
+            Licitación seleccionada
+          </div>
+          <div style={{
+            fontSize: '15px',
+            fontWeight: '600',
+            color: 'var(--text-primary)',
+            marginBottom: '16px',
+            lineHeight: '1.4',
+            wordBreak: 'break-word',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
+          }}>
+            {selectedData[0].tender_name || selectedData[0].CodigoExterno}
+          </div>
+          <button
+            onClick={handleViewDetails}
+            style={{
+              width: '100%',
+              padding: '12px 20px',
+              background: 'var(--accent-primary)',
+              color: 'var(--accent-text)',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              letterSpacing: '0.3px',
+              fontFamily: 'system-ui, -apple-system, sans-serif'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)'
+            }}
+          >
+            Analizar licitación
+          </button>
+        </div>
+      )}
+      <style>{`
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
       <EmbeddingAtlas
         coordinator={coordinator}
         colorScheme={theme}
@@ -87,28 +179,68 @@ export function Explore() {
           projection: { x: "x", y: "y" },
           text: "tender_name"
         }}
-        defaultChartsConfig={{
-          embedding: {
-            type: "embedding",
-            title: "Embedding View",
-            data: {
-              x: "x",
-              y: "y",
-              category: "_category",
-              text: "CodigoExterno"
-            }
-          },
-          override: {
-            "sql_predicates": {
+        initialState={{
+          version: "0.13.0",
+          timestamp: Date.now(),
+          charts: {
+            "embedding": {
+              type: "embedding",
+              title: "Embedding View",
+              data: {
+                x: "x",
+                y: "y",
+                category: "_category",
+                text: "CodigoExterno"
+              }
+            },
+            "predicates": {
               type: "predicates",
               title: "SQL Filters",
               items: [
                 {
                   name: "Quick Award (<150 days)",
                   predicate: "date_diff('day', first_activity_date, FechaAdjudicacion) < 150"
+                },
+                {
+                  name: "High Daily Award Rate",
+                  predicate: "MontoLineaAdjudica/date_diff('day', first_activity_date, FechaAdjudicacion)>1000000"
                 }
               ]
             }
+          }
+        }}
+        onStateChange={async (state) => {
+          console.log("========== STATE CHANGE ==========")
+          console.log("Full state:", state)
+          console.log("Selection predicate:", state.predicate)
+          console.log("Predicate type:", typeof state.predicate)
+          console.log("==================================")
+
+          // Update selection predicate
+          setSelectionPredicate(state.predicate || null)
+
+          // Query selected data if there's a selection
+          if (state.predicate && coordinator) {
+            try {
+              console.log("Querying with predicate:", state.predicate)
+              const result = await coordinator.query(
+                `SELECT * FROM data WHERE ${state.predicate}`
+              )
+              console.log("Query result:", result)
+              console.log("Result type:", typeof result)
+
+              const dataArray = result ? Array.from(result) : null
+              console.log("Data array:", dataArray)
+              console.log("Data array length:", dataArray?.length)
+
+              setSelectedData(dataArray)
+            } catch (err) {
+              console.error("Failed to query selection:", err)
+              setSelectedData(null)
+            }
+          } else {
+            console.log("No predicate, clearing selection")
+            setSelectedData(null)
           }
         }}
         chartTheme={{

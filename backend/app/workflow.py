@@ -1,9 +1,11 @@
 """
 LangGraph Workflow for Fraud Detection - Orchestrates ranking and parallel investigation
 """
-from typing import Annotated, List, Dict, Any
+from typing import Annotated, List, Dict, Any, Optional
 from typing_extensions import TypedDict
 import uuid
+import asyncio
+from datetime import datetime
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -24,12 +26,14 @@ from app.utils.get_tender import get_tender, TenderResponse
 from app.utils.build_ranking_input import build_ranking_input, fetch_and_extract_documents
 from app.investigation_tasks import INVESTIGATION_TASKS, InvestigationTask
 from app.schemas import TaskRankingOutput, TaskInvestigationOutput
+from app.utils.websocket_manager import manager
 
 
 class WorkflowState(TypedDict):
     """State definition for the fraud detection workflow"""
     # Input
     tender_id: str
+    session_id: Optional[str]  # For WebSocket streaming
 
     # Fetched tender data
     tender_response: TenderResponse
@@ -103,6 +107,26 @@ class FraudDetectionWorkflow:
         self.graph = self._build_graph()
         self.app = self.graph.compile()
 
+    def _send_log(self, session_id: Optional[str], message: str):
+        """
+        Send a log message via WebSocket if session_id is provided.
+
+        This is a synchronous wrapper that handles async WebSocket communication internally.
+
+        Args:
+            session_id: Optional session ID for WebSocket streaming
+            message: Log message to send
+        """
+        if session_id:
+            try:
+                asyncio.run(manager.send_observation(session_id, {
+                    "type": "log",
+                    "message": message,
+                    "timestamp": datetime.now().isoformat()
+                }))
+            except Exception as e:
+                print(f"Failed to send log to WebSocket: {e}")
+
     def _build_graph(self) -> StateGraph:
         """Build the LangGraph workflow graph"""
 
@@ -134,30 +158,40 @@ class FraudDetectionWorkflow:
         Retrieves tender metadata and documents, then builds RankingInput.
         """
         tender_id = state["tender_id"]
+        session_id = state.get("session_id")
+
+        self._send_log(session_id, f"Fetching tender data for {tender_id}...")
         print(f"Fetching tender data for {tender_id}...")
 
         try:
             # Fetch tender metadata from API
+            self._send_log(session_id, "Retrieving tender metadata from API...")
             tender_response = get_tender(tender_id)
             state["tender_response"] = tender_response
 
+            self._send_log(session_id, f"Tender metadata fetched: {tender_response.name}")
             print(f"Tender metadata fetched: {tender_response.name}")
 
             # Fetch and extract documents (first 3 documents, first 5 pages each)
+            self._send_log(session_id, "Fetching tender documents...")
             print("Fetching tender documents...")
             tender_documents = fetch_and_extract_documents(tender_id, max_docs=3)
             state["tender_documents"] = tender_documents
 
+            self._send_log(session_id, f"Fetched {len(tender_documents)} documents")
             print(f"Fetched {len(tender_documents)} documents")
 
             # Build RankingInput from fetched data
+            self._send_log(session_id, "Processing tender data...")
             ranking_input = build_ranking_input(tender_response, tender_documents)
             state["input_data"] = ranking_input
 
+            self._send_log(session_id, "Tender data processing complete")
             print("Tender data processing complete")
 
         except Exception as e:
             error_msg = f"Failed to fetch tender data: {str(e)}"
+            self._send_log(session_id, f"Error: {error_msg}")
             print(f"Error: {error_msg}")
             state["errors"].append(error_msg)
 
@@ -179,10 +213,14 @@ class FraudDetectionWorkflow:
 
         Simply loads the INVESTIGATION_TASKS into state for ranking.
         """
+        session_id = state.get("session_id")
+
+        self._send_log(session_id, f"Loading {len(INVESTIGATION_TASKS)} investigation tasks...")
         print(f"Loading {len(INVESTIGATION_TASKS)} investigation tasks...")
 
         state["investigation_tasks"] = INVESTIGATION_TASKS
 
+        self._send_log(session_id, f"Tasks loaded. Ready for ranking.")
         print(f"Tasks loaded. Ready for ranking.")
 
         return state
@@ -193,6 +231,9 @@ class FraudDetectionWorkflow:
 
         Analyzes tender context and ranks investigation tasks by priority.
         """
+        session_id = state.get("session_id")
+
+        self._send_log(session_id, "Starting task ranking...")
         print("Starting task ranking...")
 
         try:
@@ -229,6 +270,7 @@ Return the ranked tasks with rationale.
 """
 
             # Run ranking agent
+            self._send_log(session_id, "Analyzing tender and ranking tasks...")
             ranking_result: TaskRankingOutput = self.ranking_agent.run(RankingInput(
                 tender_id=state['input_data'].tender_id,
                 tender_name=state['input_data'].tender_name,
@@ -241,15 +283,18 @@ Return the ranked tasks with rationale.
             # Extract ranked tasks
             state["ranked_tasks"] = ranking_result.ranked_tasks[:5]  # Top 5
 
+            self._send_log(session_id, f"Task ranking complete. Top {len(state['ranked_tasks'])} tasks selected.")
             print(f"Task ranking complete. Top {len(state['ranked_tasks'])} tasks selected.")
             for i, task in enumerate(state['ranked_tasks'], 1):
                 print(f"  {i}. Task {task['id']} ({task['code']}): {task['name'][:50]}...")
 
         except Exception as e:
+            self._send_log(session_id, f"Task ranking failed: {e}")
             print(f"Task ranking failed: {e}")
             state["errors"].append(f"Task ranking error: {str(e)}")
             # Fallback: use first 5 tasks
             state["ranked_tasks"] = state["investigation_tasks"][:5]
+            self._send_log(session_id, "Using fallback: first 5 tasks")
             print(f"Using fallback: first 5 tasks")
 
         return state
@@ -260,6 +305,9 @@ Return the ranked tasks with rationale.
 
         Launches parallel task investigations for each ranked task.
         """
+        session_id = state.get("session_id")
+
+        self._send_log(session_id, f"Launching {len(state['ranked_tasks'])} parallel task investigations...")
         print(f"Launching {len(state['ranked_tasks'])} parallel task investigations...")
 
         # Create Send commands for each ranked task
@@ -271,7 +319,8 @@ Return the ranked tasks with rationale.
                 "task": task,
                 "tender_context": state["input_data"],
                 "tender_documents": state["tender_documents"],
-                "investigation_id": f"task_{task['id']}_{uuid.uuid4().hex[:8]}"
+                "investigation_id": f"task_{task['id']}_{uuid.uuid4().hex[:8]}",
+                "session_id": session_id  # Pass session_id to child nodes
             }
 
             # Create Send command to investigate_task node
@@ -296,6 +345,9 @@ Return the ranked tasks with rationale.
         """
         task = inputs.get("task")
         investigation_id = inputs.get("investigation_id", "unknown")
+        session_id = inputs.get("session_id")
+
+        self._send_log(session_id, f"Investigation {investigation_id} starting for Task {task['id']} ({task['code']})...")
         print(f"Investigation {investigation_id} starting for Task {task['id']} ({task['code']})...")
 
         try:
@@ -340,6 +392,7 @@ Please investigate this task systematically and report your findings.
 """
 
             # Run investigation (reusing FraudDetectionAgent but with task-based input)
+            self._send_log(session_id, f"Running investigation for Task {task['id']} ({task['code']})...")
             detection_input = FraudDetectionInput(
                 tender_id=tender_context.tender_id,
                 risk_indicators=[task['name']],
@@ -358,11 +411,13 @@ Please investigate this task systematically and report your findings.
                 investigation_summary=result.investigation_summary
             )
 
+            self._send_log(session_id, f"Task {task['id']} investigation complete. Validation passed: {task_result.validation_passed}")
             print(f"Task {task['id']} investigation complete. Validation passed: {task_result.validation_passed}")
 
             return task_result
 
         except Exception as e:
+            self._send_log(session_id, f"Task {task['id']} investigation failed: {e}")
             print(f"Task {task['id']} investigation failed: {e}")
             # Return error result
             return TaskInvestigationOutput(
@@ -380,6 +435,9 @@ Please investigate this task systematically and report your findings.
 
         Orders results by task ID.
         """
+        session_id = state.get("session_id")
+
+        self._send_log(session_id, f"Aggregating {len(state.get('task_investigation_results', []))} task investigation results...")
         print(f"Aggregating {len(state.get('task_investigation_results', []))} task investigation results...")
 
         # Get all task results
@@ -416,17 +474,19 @@ Please investigate this task systematically and report your findings.
 
         state["workflow_summary"] = "\n".join(summary_lines)
 
+        self._send_log(session_id, f"Workflow complete. {failed_validations}/{total_investigated} validations failed.")
         print(f"\nWorkflow complete. {failed_validations}/{total_investigated} validations failed.")
         print(state["workflow_summary"])
 
         return state
 
-    def run(self, tender_id: str) -> Dict[str, Any]:
+    def run(self, tender_id: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute the fraud detection workflow.
 
         Args:
             tender_id: Tender ID to investigate
+            session_id: Optional session ID for WebSocket streaming
 
         Returns:
             Dict containing:
@@ -440,9 +500,10 @@ Please investigate this task systematically and report your findings.
             - workflow_summary: Summary of the investigation
             - errors: List of errors encountered
         """
-        # Initialize state with just tender_id
+        # Initialize state with tender_id and session_id
         initial_state: WorkflowState = {
             "tender_id": tender_id,
+            "session_id": session_id,
             "tender_response": None,
             "tender_documents": [],
             "investigation_tasks": [],
@@ -459,19 +520,21 @@ Please investigate this task systematically and report your findings.
 
         return result
 
-    def stream(self, tender_id: str):
+    def stream(self, tender_id: str, session_id: Optional[str] = None):
         """
         Stream workflow execution for real-time monitoring.
 
         Args:
             tender_id: Tender ID to investigate
+            session_id: Optional session ID for WebSocket streaming
 
         Yields:
             State updates as the workflow progresses
         """
-        # Initialize state with just tender_id
+        # Initialize state with tender_id and session_id
         initial_state: WorkflowState = {
             "tender_id": tender_id,
+            "session_id": session_id,
             "tender_response": None,
             "tender_documents": [],
             "investigation_tasks": [],

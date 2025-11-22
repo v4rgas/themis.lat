@@ -1,12 +1,17 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      network: host
     ports:
       - "8001:8000"
     volumes:
       - ./backend/app:/app/app
       - ./backend/datasets:/app/datasets
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   frontend:
     build: ./frontend

@@ -2,8 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List, Optional
 import re
+import logging
 from pydantic import BaseModel, Field
 from langchain.tools import tool
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_value(value: str) -> Optional[str]:
@@ -35,10 +38,15 @@ def extract_qs_from_award_page(html: str) -> str:
 
 def fetch_award_modal_html(qs: str) -> str:
     url = f"https://www.mercadopublico.cl/Procurement/Modules/RFB/StepsProcessAward/PreviewAwardAct.aspx?qs={qs}"
-    
-    response = requests.get(url, timeout=30.0)
-    response.raise_for_status()
-    return response.text
+    logger.info(f"Fetching award modal HTML with qs={qs}")
+    try:
+        response = requests.get(url, timeout=30.0)
+        response.raise_for_status()
+        logger.info(f"Successfully fetched award modal HTML (status={response.status_code}, length={len(response.text)})")
+        return response.text
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch award modal HTML: {type(e).__name__}: {str(e)}")
+        raise
 
 
 def parse_attachments(soup: BeautifulSoup) -> List[Dict[str, str]]:
@@ -393,16 +401,31 @@ def read_award_result(id: str) -> Dict[str, Any]:
         return {'ok': False}
     
     if img_element.get('disabled') == 'disabled':
+        logger.warning(f"Award button is disabled for tender {id}")
         return {'ok': False}
     
-    qs = extract_qs_from_award_page(main_html)
-    modal_html = fetch_award_modal_html(qs)
+    try:
+        qs = extract_qs_from_award_page(main_html)
+        logger.info(f"Extracted qs parameter: {qs}")
+    except Exception as e:
+        logger.error(f"Failed to extract qs parameter: {type(e).__name__}: {str(e)}")
+        raise
+    
+    try:
+        modal_html = fetch_award_modal_html(qs)
+        logger.info(f"Modal HTML fetched successfully (length={len(modal_html)})")
+    except Exception as e:
+        logger.error(f"Failed to fetch modal HTML: {type(e).__name__}: {str(e)}")
+        raise
     
     soup = BeautifulSoup(modal_html, 'html.parser')
     div_content = soup.find('div', id='divContent')
     
     if not div_content:
+        logger.error(f"Could not find divContent in modal HTML for tender {id}")
         raise Exception("Could not find divContent in modal HTML")
+    
+    logger.info(f"Found divContent in modal HTML")
     
     content_soup = BeautifulSoup(str(div_content), 'html.parser')
     

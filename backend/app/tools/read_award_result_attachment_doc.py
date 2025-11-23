@@ -1,4 +1,6 @@
 import base64
+import os
+import tempfile
 from pydantic import BaseModel, Field
 from langchain.tools import tool
 import requests
@@ -47,20 +49,35 @@ def read_award_result_attachment_doc(id: str, row_id: int, start_page: int, end_
         }
 
     try:
-        BASE_URL = "https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=<ID>"
-        url = BASE_URL.replace("<ID>", id)
+        temp_dir = tempfile.gettempdir()
+        temp_subdir = os.path.join(temp_dir, "mercado_publico_award_attachments")
+        os.makedirs(temp_subdir, exist_ok=True)
         
-        response = requests.get(url, timeout=30.0)
-        response.raise_for_status()
-        main_html = response.text
+        cache_filename = f"{id}_{row_id}.pdf"
+        cache_path = os.path.join(temp_subdir, cache_filename)
         
-        qs = extract_qs_from_award_page(main_html)
-        modal_html = fetch_award_modal_html(qs)
-        
-        soup = BeautifulSoup(modal_html, 'html.parser')
-        
-        file_content = download_award_attachment_by_row_id(qs, soup, row_id)
-        file_size = len(file_content)
+        if os.path.exists(cache_path):
+            with open(cache_path, 'rb') as f:
+                file_content = f.read()
+            file_size = len(file_content)
+        else:
+            BASE_URL = "https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=<ID>"
+            url = BASE_URL.replace("<ID>", id)
+            
+            response = requests.get(url, timeout=30.0)
+            response.raise_for_status()
+            main_html = response.text
+            
+            qs = extract_qs_from_award_page(main_html)
+            modal_html = fetch_award_modal_html(qs)
+            
+            soup = BeautifulSoup(modal_html, 'html.parser')
+            
+            file_content = download_award_attachment_by_row_id(qs, soup, row_id)
+            file_size = len(file_content)
+            
+            with open(cache_path, 'wb') as f:
+                f.write(file_content)
 
         base64_pdf = base64.b64encode(file_content).decode('utf-8')
 

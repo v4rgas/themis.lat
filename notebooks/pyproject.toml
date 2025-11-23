@@ -5,10 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "faiss-cpu>=1.13.0",
     "fastparquet>=2024.11.0",
     "hnne>=2.0.1",
     "matplotlib>=3.10.7",
     "notebook>=7.5.0",
+    "opentsne>=1.0.4",
     "pandas>=2.3.3",
     "seaborn>=0.13.2",
     "sentence-transformers>=5.1.2",

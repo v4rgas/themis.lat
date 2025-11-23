@@ -1,5 +1,7 @@
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
 from umap import UMAP
+from openTSNE import TSNE
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from tqdm import tqdm
@@ -191,7 +193,11 @@ def process_and_embed_one_file(
     # Load model in this process
     model = get_model()
     # Load CSV with latin-1 encoding and semicolon separator
-    df = pd.read_csv(file_path, encoding="latin-1", sep=";")
+    df = (
+        pd.read_csv(file_path, encoding="latin-1", sep=";")
+        .sample(frac=0.2)
+        .reset_index(drop=True)
+    )
 
     # Prepare numeric data for UMAP
     # Ensure all required numeric columns exist, fill missing ones with 0
@@ -358,6 +364,42 @@ if __name__ == "__main__":
     all_combined_features_array = np.concatenate(all_combined_features, axis=0)
     print(f"Combined features array shape: {all_combined_features_array.shape}")
 
+    # Apply global normalization to numeric features only (text embeddings are already normalized)
+    # Split features: text embeddings (first 384 cols) and numeric features (last 33 cols)
+    text_embedding_dim = 384
+    numeric_feature_dim = all_combined_features_array.shape[1] - text_embedding_dim
+
+    print(f"\nApplying global normalization to numeric features...")
+    print(f"  - Text embedding columns: 0-{text_embedding_dim - 1} (keeping as-is)")
+    print(
+        f"  - Numeric feature columns: {text_embedding_dim}-{all_combined_features_array.shape[1] - 1} (normalizing)"
+    )
+
+    # Extract numeric features (last numeric_feature_dim columns)
+    numeric_features = all_combined_features_array[:, text_embedding_dim:]
+
+    # Normalize numeric features globally
+    scaler = StandardScaler()
+    numeric_features_normalized = scaler.fit_transform(numeric_features).astype(
+        np.float32
+    )
+
+    # Reconstruct combined features with normalized numeric part
+    all_combined_features_array = np.concatenate(
+        [
+            all_combined_features_array[:, :text_embedding_dim],
+            numeric_features_normalized,
+        ],
+        axis=1,
+    )
+    print(f"Global normalization complete. Feature statistics:")
+    print(
+        f"  - Text embeddings: mean={all_combined_features_array[:, :text_embedding_dim].mean():.4f}, std={all_combined_features_array[:, :text_embedding_dim].std():.4f}"
+    )
+    print(
+        f"  - Numeric features: mean={numeric_features_normalized.mean():.4f}, std={numeric_features_normalized.std():.4f}"
+    )
+
     # Check for duplicate rows (can cause issues with nearest neighbor search)
     # Add tiny random noise to duplicate rows to make them unique
     print("\nChecking for duplicate rows...")
@@ -375,19 +417,15 @@ if __name__ == "__main__":
         )
         all_combined_features_array = all_combined_features_array + noise
 
-    # Apply Dimensionality Reduction to the combined features (once for all data)
-    print("\nComputing UMAP on all combined features...")
-    reducer = UMAP(n_components=2, random_state=42)
-    umap_embedding = reducer.fit_transform(all_combined_features_array)
+    X_embedded_tsne = TSNE(n_components=2, perplexity=50, n_jobs=-1).fit(
+        all_combined_features_array
+    )
 
-    # Add UMAP x and y columns to the final result DataFrame
-    final_result_df["x"] = umap_embedding[:, 0]
-    final_result_df["y"] = umap_embedding[:, 1]
-
-    # Save final output
-    output_path = "downloads/all_months_umap.parquet"
-    print(f"\nSaving final result to {output_path}...")
-    final_result_df.to_parquet(output_path)
+    output_path_tsne = "downloads/all_months_tsne_gpu.parquet"
+    print(f"\nSaving final result to {output_path_tsne}...")
+    final_result_df["x"] = X_embedded_tsne[:, 0]
+    final_result_df["y"] = X_embedded_tsne[:, 1]
+    final_result_df.to_parquet(output_path_tsne)
 
     print(f"\nCompleted! Final dataset shape: {final_result_df.shape}")
     print(f"Columns: {list(final_result_df.columns)}")

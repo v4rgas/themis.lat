@@ -161,3 +161,23 @@ class TaskInvestigationOutput(BaseModel):
     validation_passed: bool = Field(description="Whether the task validation passed")
     findings: List[Anomaly] = Field(description="Anomalies/issues found during investigation")
     investigation_summary: str = Field(description="Summary of the investigation")
+
+
+class SummaryOutput(BaseModel):
+    """Output from the Summary Agent - agentic analysis of all investigation results"""
+    executive_summary: str = Field(
+        description=(
+            "Executive summary in markdown format explaining: "
+            "1) Overall risk level (BAJO/MEDIO/ALTO/CRÍTICO), "
+            "2) Main conclusion about fraud indicators, "
+            "3) Key correlated findings across tasks that suggest fraud patterns"
+        )
+    )
+    detailed_analysis: str = Field(
+        description=(
+            "Detailed analysis in markdown format with: "
+            "1) Each investigated task (code, name, status), "
+            "2) All anomalies found with evidence, confidence scores, "
+            "3) Cross-references between related findings"
+        )
+    )

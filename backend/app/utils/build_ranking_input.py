@@ -20,6 +20,7 @@ from app.utils.document_reader import (
     get_file_extension_from_mime,
     extract_text_locally
 )
+from app.utils.cache_manager import get_cache_manager
 
 
 def build_ranking_input(
@@ -162,6 +163,9 @@ def fetch_and_extract_documents(
     """
     documents = []
 
+    # Get cache manager
+    cache = get_cache_manager()
+
     try:
         # Get list of attachments
         attachments = _read_buyer_attachments_table(tender_id)
@@ -201,16 +205,19 @@ def fetch_and_extract_documents(
                     mime_type = "application/pdf"
 
                 combined_text = ""
-                
+
                 # Try local extraction for DOCX files
                 if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                     local_result = extract_text_locally(file_content, mime_type)
-                    
+
                     if local_result["success"]:
                         text = local_result["text"]
                         if len(text) >= 100:
                             combined_text = text
                             print(f"  ✓ Successfully extracted text from DOCX (local)")
+
+                            # Cache the extracted DOCX text (save as page 1)
+                            cache.set_ocr_result(tender_id, idx, 1, text)
                         else:
                             print(f"  ✗ DOCX text too short ({len(text)} chars), skipping")
                             continue
@@ -258,6 +265,9 @@ def fetch_and_extract_documents(
                         if markdown_text:
                             extracted_text.append(f"--- Page {page_num + 1} ---\n{markdown_text}")
                             pages_read.append(page_num + 1)
+
+                            # Cache this page's OCR result
+                            cache.set_ocr_result(tender_id, idx, page_num + 1, markdown_text)
 
                     combined_text = "\n\n".join(extracted_text)
 

@@ -114,6 +114,14 @@ class SimpleAgent:
         result = self.agent.invoke({"messages": [{"role": "user", "content": message}]})
 
         # Return the structured response
+        if "structured_response" not in result:
+            # Debug: Print available keys to understand the issue
+            print(f"WARNING: structured_response not found in result. Available keys: {result.keys()}")
+            # Raise a more informative error
+            raise ValueError(
+                f"Agent did not return structured_response. Available keys: {list(result.keys())}. "
+                f"This may indicate the agent failed to complete successfully."
+            )
         return result["structured_response"]
 
     def _extract_response(self, result: Dict[str, Any]) -> str:

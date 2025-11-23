@@ -21,6 +21,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 from app.agents.ranking_agent import RankingAgent
 from app.agents.fraud_detection_agent import FraudDetectionAgent
+from app.agents.summary_agent import SummaryAgent
 from app.schemas import (
     RankingInput,
     RankingOutput,
@@ -28,6 +29,7 @@ from app.schemas import (
     FraudDetectionInput,
     FraudDetectionOutput,
     Anomaly,
+    SummaryOutput,
 )
 from app.utils.get_tender import get_tender, TenderResponse
 from app.utils.build_ranking_input import (
@@ -572,78 +574,68 @@ Please investigate this task systematically and report your findings.
 
     def _cleanup_temp_files(self, tender_id: str, session_id: Optional[str] = None):
         """
-        Clean up temporary PDF files for this tender.
+        Clean up old cache files (age-based cleanup).
 
-        Removes files from the temporary directory that were downloaded during
-        this workflow execution. Only removes files associated with this tender
-        to avoid affecting concurrent workflows.
+        Instead of deleting files immediately after workflow completion, this performs
+        age-based cleanup of cache files older than 24 hours. This allows cache reuse
+        across multiple workflow runs while preventing unbounded cache growth.
+
+        Cache files (OCR results, HTML pages, documents) are preserved for reuse
+        in subsequent workflows, significantly reducing API calls and improving performance.
 
         Args:
-            tender_id: Tender ID to identify files to clean up
+            tender_id: Tender ID (preserved for compatibility, but not used for cleanup)
             session_id: Optional session ID for WebSocket streaming
         """
-        if not tender_id:
-            return
-
-        self._send_log(session_id, "Cleaning up temporary files...")
+        self._send_log(session_id, "Performing cache cleanup (removing files >24h old)...")
 
         try:
-            # Get the temporary directory path used by read_buyer_attachment_doc
-            temp_dir = tempfile.gettempdir()
-            temp_subdir = os.path.join(temp_dir, "mercado_publico_buyer_attachments")
+            from app.utils.cache_manager import get_cache_manager
 
-            # Check if directory exists
-            if not os.path.exists(temp_subdir):
-                return
+            cache = get_cache_manager()
 
-            # Find files for this specific tender
-            # Files are named: {tender_id}_{row_id}_{file_name}
-            pattern = os.path.join(temp_subdir, f"{tender_id}_*")
-            tender_files = glob.glob(pattern)
+            # Get cache stats before cleanup
+            stats_before = cache.get_cache_stats()
 
-            deleted_count = 0
-            deleted_size = 0
+            # Clean up files older than 24 hours
+            cache.cleanup_old_cache(max_age_hours=24)
 
-            for file_path in tender_files:
-                try:
-                    # Get file size before deletion
-                    file_size = os.path.getsize(file_path)
+            # Get cache stats after cleanup
+            stats_after = cache.get_cache_stats()
 
-                    # Delete the file
-                    os.remove(file_path)
+            # Calculate what was removed
+            ocr_removed = stats_before['ocr_files'] - stats_after['ocr_files']
+            html_removed = stats_before['html_files'] - stats_after['html_files']
+            docs_removed = stats_before['docs_files'] - stats_after['docs_files']
 
-                    deleted_count += 1
-                    deleted_size += file_size
+            total_removed = ocr_removed + html_removed + docs_removed
 
-                    logging.debug(
-                        f"Deleted temp file: {os.path.basename(file_path)} ({file_size} bytes)"
-                    )
-
-                except Exception as e:
-                    import traceback
-
-                    logging.warning(f"Failed to delete temp file {file_path}: {e}")
-                    traceback.print_exc()
-
-            if deleted_count > 0:
-                logging.info(
-                    f"Cleanup complete: Deleted {deleted_count} temp files ({deleted_size} bytes)"
+            if total_removed > 0:
+                cleanup_msg = (
+                    f"Cache cleanup: Removed {total_removed} old files "
+                    f"(OCR: {ocr_removed}, HTML: {html_removed}, Docs: {docs_removed})"
                 )
-                cleanup_msg = f"Cleanup complete: Removed {deleted_count} temp files ({deleted_size / 1024:.1f} KB)"
+                logging.info(cleanup_msg)
                 self._send_log(session_id, cleanup_msg)
-                print(
-                    f"Cleanup: Deleted {deleted_count} temp PDF files ({deleted_size / 1024:.1f} KB)"
-                )
+                print(cleanup_msg)
             else:
-                self._send_log(session_id, "No temporary files to clean up")
+                self._send_log(session_id, "Cache cleanup: No old files to remove")
+
+            # Log current cache stats
+            cache_info = (
+                f"Cache stats: {stats_after['ocr_files']} OCR files ({stats_after['ocr_size_mb']:.1f}MB), "
+                f"{stats_after['html_files']} HTML files ({stats_after['html_size_mb']:.1f}MB), "
+                f"{stats_after['docs_files']} documents ({stats_after['docs_size_mb']:.1f}MB)"
+            )
+            logging.info(cache_info)
 
         except Exception as e:
             # Don't raise - cleanup failures shouldn't break the workflow
             import traceback
 
-            logging.warning(f"Temp file cleanup failed: {e}")
+            logging.warning(f"Cache cleanup failed: {e}")
             traceback.print_exc()
-            print(f"Warning: Temp file cleanup failed: {e}")
+            print(f"Warning: Cache cleanup failed: {e}")
 
     def _aggregate_results(self, state: WorkflowState) -> WorkflowState:
         """
@@ -670,7 +662,7 @@ Please investigate this task systematically and report your findings.
 
         state["tasks_by_id"] = tasks_by_id
 
-        # Generate workflow summary
+        # Calculate summary statistics for logging
         total_investigated = len(task_results)
         failed_validations = sum(1 for r in task_results if not r.validation_passed)
         total_findings = sum(len(r.findings) for r in task_results)
@@ -681,28 +673,71 @@ Please investigate this task systematically and report your findings.
             f"Summary: {failed_validations} failed, {total_investigated - failed_validations} passed, {total_findings} total findings",
         )
 
-        summary_lines = []
-        summary_lines.append("=" * 60)
-        summary_lines.append("INVESTIGATION WORKFLOW COMPLETE")
-        summary_lines.append("=" * 60)
-        summary_lines.append(f"Tasks investigated: {total_investigated}")
-        summary_lines.append(f"Validations failed: {failed_validations}")
-        summary_lines.append(f"Total findings: {total_findings}")
-        summary_lines.append("")
-        summary_lines.append("RESULTS BY TASK ID:")
+        # Generate agentic summary using SummaryAgent
+        self._send_log(
+            session_id,
+            "Generating agentic summary with correlation analysis...",
+        )
+        print("\nGenerating agentic summary with correlation analysis...")
 
-        for result in tasks_by_id:
-            status = "✓ PASSED" if result.validation_passed else "✗ FAILED"
-            summary_lines.append(
-                f"\nTask {result.task_id} ({result.task_code}): {status}"
+        try:
+            summary_agent = SummaryAgent(
+                model_name=self.model_name,
+                temperature=0.3,  # Lower temperature for more focused analysis
             )
-            summary_lines.append(f"  {result.task_name}")
-            if result.findings:
-                summary_lines.append(f"  Findings: {len(result.findings)}")
-                for finding in result.findings[:2]:  # Show first 2
-                    summary_lines.append(f"    - {finding.anomaly_name}")
+            summary_output: SummaryOutput = summary_agent.run(
+                task_results=tasks_by_id,
+                session_id=session_id,
+            )
 
-        state["workflow_summary"] = "\n".join(summary_lines)
+            # Combine executive summary and detailed analysis into workflow_summary
+            state["workflow_summary"] = f"""{summary_output.executive_summary}
+
+---
+
+{summary_output.detailed_analysis}"""
+
+            self._send_log(
+                session_id,
+                "Agentic summary generation complete.",
+            )
+            print("\nAgentic summary generation complete.")
+            print(state["workflow_summary"])
+
+        except Exception as e:
+            # Fallback to simple summary if agent fails
+            import traceback
+            self._send_log(
+                session_id,
+                f"WARNING: Summary agent failed - {str(e)}. Using fallback summary.",
+            )
+            logging.warning(f"Summary agent failed: {e}")
+            traceback.print_exc()
+
+            # Generate simple fallback summary
+            summary_lines = []
+            summary_lines.append("=" * 60)
+            summary_lines.append("INVESTIGATION WORKFLOW COMPLETE")
+            summary_lines.append("=" * 60)
+            summary_lines.append(f"Tasks investigated: {total_investigated}")
+            summary_lines.append(f"Validations failed: {failed_validations}")
+            summary_lines.append(f"Total findings: {total_findings}")
+            summary_lines.append("")
+            summary_lines.append("RESULTS BY TASK ID:")
+
+            for result in tasks_by_id:
+                status = "✓ PASSED" if result.validation_passed else "✗ FAILED"
+                summary_lines.append(
+                    f"\nTask {result.task_id} ({result.task_code}): {status}"
+                )
+                summary_lines.append(f"  {result.task_name}")
+                if result.findings:
+                    summary_lines.append(f"  Findings: {len(result.findings)}")
+                    for finding in result.findings[:2]:  # Show first 2
+                        summary_lines.append(f"    - {finding.anomaly_name}")
+
+            state["workflow_summary"] = "\n".join(summary_lines)
+            print(state["workflow_summary"])
 
         self._send_log(
             session_id,
@@ -711,7 +746,6 @@ Please investigate this task systematically and report your findings.
         print(
             f"\nWorkflow complete. {failed_validations}/{total_investigated} validations failed."
         )
-        print(state["workflow_summary"])
 
         # Clean up temporary PDF files for this tender
         try:

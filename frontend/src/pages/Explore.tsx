@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { EmbeddingAtlas } from "embedding-atlas/react"
 import { Coordinator, wasmConnector } from '@uwdata/vgplot'
-import { loadParquet } from '@uwdata/mosaic-sql'
 import { useTheme } from '../context/ThemeContext'
 
 export function Explore() {
@@ -12,7 +11,6 @@ export function Explore() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedData, setSelectedData] = useState<any[] | null>(null)
-  const [selectionPredicate, setSelectionPredicate] = useState<string | null>(null)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [downloadStatus, setDownloadStatus] = useState('Iniciando descarga...')
 
@@ -306,9 +304,6 @@ export function Explore() {
           console.log("Selection predicate:", state.predicate)
           console.log("Predicate type:", typeof state.predicate)
           console.log("==================================")
-
-          // Update selection predicate
-          setSelectionPredicate(state.predicate || null)
 
           // Query selected data if there's a selection
           if (state.predicate && coordinator) {

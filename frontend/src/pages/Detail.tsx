@@ -18,7 +18,6 @@ export function Detail() {
   const [nodeData, setNodeData] = useState<any>(null)
   const [logs, setLogs] = useState<LogEvent[]>([])
   const [isInvestigating, setIsInvestigating] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const latestLogRef = useRef<HTMLDivElement | null>(null)
@@ -95,8 +94,6 @@ export function Detail() {
       })
 
       const data = await response.json()
-      setSessionId(data.session_id)
-
       connectWebSocket(data.session_id)
     } catch (error) {
       console.error('Error starting investigation:', error)

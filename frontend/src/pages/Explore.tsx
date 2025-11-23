@@ -13,17 +13,73 @@ export function Explore() {
   const [loading, setLoading] = useState(true)
   const [selectedData, setSelectedData] = useState<any[] | null>(null)
   const [selectionPredicate, setSelectionPredicate] = useState<string | null>(null)
-
+  const [downloadProgress, setDownloadProgress] = useState(0)
+  const [downloadStatus, setDownloadStatus] = useState('Iniciando descarga...')
 
   useEffect(() => {
     async function init() {
       try {
+        setDownloadStatus('Inicializando base de datos...')
+
         // Create coordinator and connect to DuckDB-WASM
         const coord = new Coordinator()
-        coord.databaseConnector(wasmConnector())
+        const connector = wasmConnector()
+        coord.databaseConnector(connector)
+
+        // Get the DuckDB database instance
+        const db = await connector.getDuckDB()
+
+        // Download the parquet file from remote URL
+        const response = await fetch('https://r2.themis.lat/all_months_tsne_gpu.parquet')
+        if (!response.ok) {
+          throw new Error(`Failed to download: ${response.statusText}`)
+        }
+
+        const contentLength = response.headers.get('content-length')
+        const total = contentLength ? parseInt(contentLength, 10) : 0
+
+        const reader = response.body?.getReader()
+        if (!reader) {
+          throw new Error('Failed to get response reader')
+        }
+
+        const chunks: Uint8Array[] = []
+        let receivedLength = 0
+
+        setDownloadStatus('Descargando datos...')
+
+        while (true) {
+          const { done, value } = await reader.read()
+
+          if (done) break
+
+          chunks.push(value)
+          receivedLength += value.length
+
+          if (total > 0) {
+            const progress = Math.round((receivedLength / total) * 100)
+            setDownloadProgress(progress)
+            setDownloadStatus(`Descargando datos... ${progress}%`)
+          }
+        }
+
+        setDownloadStatus('Procesando datos...')
+
+        // Combine chunks into a single Uint8Array
+        const allChunks = new Uint8Array(receivedLength)
+        let position = 0
+        for (const chunk of chunks) {
+          allChunks.set(chunk, position)
+          position += chunk.length
+        }
+
+        // Register the file with DuckDB's virtual filesystem
+        await db.registerFileBuffer('data.parquet', allChunks)
 
         // Configure DuckDB settings to handle large parquet files
         await coord.exec("SET preserve_insertion_order=false")
+
+        setDownloadStatus('Cargando datos...')
 
         // Load only the columns we need from the parquet file to reduce memory usage
         await coord.exec(`
@@ -38,7 +94,7 @@ export function Explore() {
             first_activity_date,
             FechaAdjudicacion,
             FechaPublicacion
-          FROM parquet_scan('${window.location.origin}/data/all_months_tsne_gpu.parquet')
+          FROM parquet_scan('data.parquet')
         `)
 
         // Add unique row ID (CodigoExterno has duplicates)
@@ -81,7 +137,25 @@ export function Explore() {
     return (
       <div className="app loading-screen">
         <div className="loader"></div>
-        <p className="loading-text">Calculando...</p>
+        <p className="loading-text">{downloadStatus}</p>
+        {downloadProgress > 0 && (
+          <div style={{
+            width: '300px',
+            height: '8px',
+            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+            borderRadius: '4px',
+            overflow: 'hidden',
+            marginTop: '20px'
+          }}>
+            <div style={{
+              width: `${downloadProgress}%`,
+              height: '100%',
+              backgroundColor: 'var(--accent-primary)',
+              transition: 'width 0.3s ease',
+              borderRadius: '4px'
+            }} />
+          </div>
+        )}
       </div>
     )
   }

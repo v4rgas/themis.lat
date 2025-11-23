@@ -57,7 +57,7 @@ class FraudDetectionAgent:
 
     def __init__(
         self,
-        model_name: str = "google/gemini-2.5-flash-lite-preview-09-2025",
+        model_name: str = "google/gemini-2.5-flash-preview-09-2025:nitro",
         temperature: float = 0.7,
         max_iterations: int = None,
         max_execution_time: int = None,
@@ -191,7 +191,10 @@ Investigate systematically and return detailed anomalies with evidence.
             output = result["structured_response"]
             if hasattr(output, "total_iterations"):
                 # Count actual iterations from messages
-                output.total_iterations = len([m for m in result.get("messages", []) if m.get("type") == "tool"])
+                # Messages are LangChain objects, not dicts - use hasattr/getattr
+                from langchain_core.messages import ToolMessage
+                messages = result.get("messages", [])
+                output.total_iterations = len([m for m in messages if isinstance(m, ToolMessage)])
 
             return output
 

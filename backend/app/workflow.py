@@ -22,6 +22,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from app.agents.ranking_agent import RankingAgent
 from app.agents.fraud_detection_agent import FraudDetectionAgent
 from app.agents.summary_agent import SummaryAgent
+from app.config import settings
 from app.schemas import (
     RankingInput,
     RankingOutput,
@@ -97,8 +98,8 @@ class FraudDetectionWorkflow:
 
     def __init__(
         self,
-        ranking_model: str = "google/gemini-2.5-flash-lite-preview-09-2025",
-        detection_model: str = "google/gemini-2.5-flash-lite-preview-09-2025",
+        ranking_model: str = "google/gemini-2.5-flash-preview-09-2025:nitro",
+        detection_model: str = "google/gemini-2.5-flash-preview-09-2025:nitro",
         temperature: float = 0,
         max_iterations: int = None,
         max_execution_time: int = None,
@@ -811,8 +812,11 @@ Please investigate this task systematically and report your findings.
             "errors": [],
         }
 
-        # Run the workflow
-        result = self.app.invoke(initial_state)
+        # Run the workflow with increased recursion limit for parallel processing
+        config = {
+            "recursion_limit": settings.workflow_recursion_limit,
+        }
+        result = self.app.invoke(initial_state, config=config)
 
         self._send_log(session_id, "Workflow execution complete. Returning results...")
         return result

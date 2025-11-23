@@ -53,7 +53,7 @@ class RankingAgent:
 
     def __init__(
         self,
-        model_name: str = "google/gemini-2.5-flash-lite-preview-09-2025",
+        model_name: str = "google/gemini-2.5-flash-preview-09-2025:nitro",
         temperature: float = 0.7,
         max_iterations: int = None,
     ):

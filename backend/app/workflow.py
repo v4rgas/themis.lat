@@ -343,8 +343,7 @@ Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
             )
 
             # Filter tasks from investigation_tasks using the feasible IDs
-            # Limit to top 5 tasks to avoid rate limits
-            feasible_ids = classification_result.feasible_task_ids[:5]
+            feasible_ids = classification_result.feasible_task_ids
             state["ranked_tasks"] = [
                 task
                 for task in state["investigation_tasks"]

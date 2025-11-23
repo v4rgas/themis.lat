@@ -113,15 +113,7 @@ export function Explore() {
         await coord.exec(`
           CREATE TABLE data AS
           SELECT
-            CodigoExterno,
-            tender_name,
-            x,
-            y,
-            MontoEstimado,
-            MontoLineaAdjudica,
-            first_activity_date,
-            FechaAdjudicacion,
-            FechaPublicacion
+              *
           FROM parquet_scan('data.parquet')
         `)
 
@@ -404,8 +396,8 @@ export function Explore() {
               title: "SQL Filters",
               items: [
                 {
-                  name: "Adjudicación Rápida (<30 días)",
-                  predicate: "date_diff('day', first_activity_date, FechaAdjudicacion) < 30"
+                  name: "Proveedores reciente constitución (<30 días)",
+                  predicate: "abs(date_diff('day', first_activity_date::date, coalesce(FechaAdjudicacion::date, FechaCierre::date, '1900-01-01'::date))) < 30"
                 },
                 {
                   name: "Adjudicación Diaria > $1M (desde inicio)",
@@ -414,6 +406,14 @@ export function Explore() {
                 {
                   name: "Adjudicación Diaria > $1M (desde publicación)",
                   predicate: "MontoLineaAdjudica/date_diff('day', FechaPublicacion, FechaAdjudicacion)>1000000"
+                },
+                {
+                  name: "Publicación a Cierre (<5 días)",
+                  predicate: "date_diff('day', FechaPublicacion, FechaCierre) < 5"
+                },
+                {
+                  name: "Número de oferentes igual a 1",
+                  predicate: "NumeroOferentes = 1"
                 }
               ]
             }

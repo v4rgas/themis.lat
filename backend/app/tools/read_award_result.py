@@ -5,6 +5,7 @@ import re
 import logging
 from pydantic import BaseModel, Field
 from langchain.tools import tool
+from app.utils.cache_manager import get_cache_manager
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +39,28 @@ def extract_qs_from_award_page(html: str) -> str:
 
 def fetch_award_modal_html(qs: str) -> str:
     url = f"https://www.mercadopublico.cl/Procurement/Modules/RFB/StepsProcessAward/PreviewAwardAct.aspx?qs={qs}"
+
+    # Check cache first
+    cache = get_cache_manager()
+    cached_html = cache.get_html(url, max_age_seconds=3600)  # 1 hour TTL
+
+    if cached_html:
+        print(f"[CACHE HIT] HTML: award modal qs={qs[:20]}...")
+        logger.info(f"Using cached award modal HTML for qs={qs} (length={len(cached_html)})")
+        return cached_html
+
     logger.info(f"Fetching award modal HTML with qs={qs}")
     try:
         response = requests.get(url, timeout=30.0)
         response.raise_for_status()
-        logger.info(f"Successfully fetched award modal HTML (status={response.status_code}, length={len(response.text)})")
-        return response.text
+        html = response.text
+
+        # Cache the response
+        cache.set_html(url, html)
+
+        print(f"[CACHE MISS] HTML: award modal qs={qs[:20]}... (cached for future use)")
+        logger.info(f"Successfully fetched and cached award modal HTML (status={response.status_code}, length={len(html)})")
+        return html
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to fetch award modal HTML: {type(e).__name__}: {str(e)}")
         raise
@@ -158,11 +175,26 @@ def extract_provider_url_from_onclick(onclick_attr: str) -> Optional[str]:
 
 def fetch_provider_details(enc_param: str) -> Dict[str, Optional[str]]:
     url = f"https://www.mercadopublico.cl/BID/Modules/PopUps/InformationProvider.aspx?enc={enc_param}"
-    
+
+    # Check cache first
+    cache = get_cache_manager()
+    cached_html = cache.get_html(url, max_age_seconds=3600)  # 1 hour TTL
+
     try:
-        response = requests.get(url, timeout=30.0)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        if cached_html:
+            html = cached_html
+            print(f"[CACHE HIT] HTML: provider details enc={enc_param[:20]}...")
+            logger.info(f"Using cached provider details for enc={enc_param[:20]}...")
+        else:
+            response = requests.get(url, timeout=30.0)
+            response.raise_for_status()
+            html = response.text
+            # Cache the response
+            cache.set_html(url, html)
+            print(f"[CACHE MISS] HTML: provider details enc={enc_param[:20]}... (cached)")
+            logger.info(f"Fetched and cached provider details for enc={enc_param[:20]}...")
+
+        soup = BeautifulSoup(html, 'html.parser')
         
         razon_social = None
         rut = None
@@ -385,10 +417,23 @@ def read_award_result(id: str) -> Dict[str, Any]:
     """
     BASE_URL = "https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion=<ID>"
     url = BASE_URL.replace("<ID>", id)
-    
-    response = requests.get(url, timeout=30.0)
-    response.raise_for_status()
-    main_html = response.text
+
+    # Check cache first
+    cache = get_cache_manager()
+    main_html = cache.get_html(url, max_age_seconds=3600)  # 1 hour TTL
+
+    if not main_html:
+        response = requests.get(url, timeout=30.0)
+        response.raise_for_status()
+        main_html = response.text
+
+        # Cache the response
+        cache.set_html(url, main_html)
+        print(f"[CACHE MISS] HTML: main acquisition page {id} (cached)")
+        logger.info(f"Fetched and cached main acquisition page for {id}")
+    else:
+        print(f"[CACHE HIT] HTML: main acquisition page {id}")
+        logger.info(f"Using cached main acquisition page for {id}")
     
     soup = BeautifulSoup(main_html, 'html.parser')
     img_element = soup.find('input', {'id': 'imgAdjudicacion'})

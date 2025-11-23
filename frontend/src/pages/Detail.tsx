@@ -161,6 +161,7 @@ export function Detail() {
             const taskCode = taskResult.task_code;
             const taskInfo = newTasks.get(taskCode);
 
+
             if (taskInfo) {
               taskInfo.id = taskResult.task_id;
               taskInfo.name = taskResult.task_name;

@@ -5,6 +5,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import re
 from typing import Optional
+from app.utils.cache_manager import get_cache_manager
 
 class TenderDate(BaseModel):
     publish: datetime
@@ -93,11 +94,24 @@ class TenderResponse(BaseModel):
 
 async def extract_qs_from_tender_page(tender_id: str, client: httpx.AsyncClient) -> Optional[str]:
     url = f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idlicitacion={tender_id}"
-    
+
+    # Check cache first
+    cache = get_cache_manager()
+    cached_html = cache.get_html(url, max_age_seconds=3600)  # 1 hour TTL
+
     try:
-        response = await client.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        if cached_html:
+            html = cached_html
+            print(f"[CACHE HIT] HTML: tender page {tender_id} (extract QS)")
+        else:
+            response = await client.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+            response.raise_for_status()
+            html = response.text
+            # Cache the response
+            cache.set_html(url, html)
+            print(f"[CACHE MISS] HTML: tender page {tender_id} (cached)")
+
+        soup = BeautifulSoup(html, 'html.parser')
         
         img_element = soup.find('input', {'id': 'imgAdjudicacion'})
         if not img_element:
@@ -123,11 +137,24 @@ async def extract_qs_from_tender_page(tender_id: str, client: httpx.AsyncClient)
 
 async def fetch_tender_type(qs: str, client: httpx.AsyncClient) -> Optional[TenderType]:
     url = f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?qs={qs}"
-    
+
+    # Check cache first
+    cache = get_cache_manager()
+    cached_html = cache.get_html(url, max_age_seconds=3600)  # 1 hour TTL
+
     try:
-        response = await client.get(url, headers={'User-Agent': 'Mozilla/5.0'})
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        if cached_html:
+            html = cached_html
+            print(f"[CACHE HIT] HTML: tender type qs={qs[:20]}...")
+        else:
+            response = await client.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+            response.raise_for_status()
+            html = response.text
+            # Cache the response
+            cache.set_html(url, html)
+            print(f"[CACHE MISS] HTML: tender type qs={qs[:20]}... (cached)")
+
+        soup = BeautifulSoup(html, 'html.parser')
         
         type_span = soup.find('span', id='lblFicha1Tipo')
         currency_span = soup.find('span', id='lblFicha1Moneda')

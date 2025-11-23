@@ -165,6 +165,14 @@ Investigate systematically and return detailed anomalies with evidence.
         result = self.agent.invoke(state)
 
         # Return the structured response
+        if "structured_response" not in result:
+            # Debug: Print available keys to understand the issue
+            print(f"WARNING: structured_response not found in result. Available keys: {result.keys()}")
+            # Raise a more informative error
+            raise ValueError(
+                f"Agent did not return structured_response. Available keys: {list(result.keys())}. "
+                f"This may indicate the agent failed to complete successfully."
+            )
         return result["structured_response"]
 
     def _format_context(self, context: Dict[str, Any]) -> str:

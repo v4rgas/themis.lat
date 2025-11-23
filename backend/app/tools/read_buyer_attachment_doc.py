@@ -17,6 +17,7 @@ from app.utils.document_reader import (
     get_file_extension_from_mime,
     extract_text_locally
 )
+from app.utils.cache_manager import get_cache_manager
 
 
 class ReadBuyerAttachmentDocInput(BaseModel):
@@ -154,17 +155,47 @@ def read_buyer_attachment_doc(
                 "error": "MISTRAL_API_KEY environment variable not set"
             }
 
-        base64_pdf = base64.b64encode(file_content).decode('utf-8')
+        # Get cache manager
+        cache = get_cache_manager()
 
-        # Initialize Mistral client
+        # Check which pages are already cached
+        cached_pages = cache.get_ocr_results_range(tender_id, row_id, start_page, end_page)
+
+        # Determine which pages need to be OCR'd
+        requested_pages = set(range(start_page, end_page + 1))
+        pages_in_cache = set(cached_pages.keys())
+        pages_to_ocr = requested_pages - pages_in_cache
+
+        # If all pages are cached, return them immediately
+        if not pages_to_ocr:
+            extracted_text = []
+            pages_read = []
+            for page_num in sorted(requested_pages):
+                text = cached_pages[page_num]
+                extracted_text.append(f"--- Page {page_num} ---\n{text}")
+                pages_read.append(page_num)
+
+            combined_text = "\n\n".join(extracted_text)
+            print(f"[CACHE HIT] OCR: {tender_id}_{row_id} pages {start_page}-{end_page} - all {len(requested_pages)} pages from cache")
+            return {
+                "text": combined_text,
+                "total_pages": max(requested_pages),  # Best estimate from cache
+                "pages_read": pages_read,
+                "file_size": file_size,
+                "success": True,
+                "cached": True,
+                "ocr_cached": True
+            }
+
+        # Initialize Mistral client for pages that need OCR
         client = Mistral(api_key=api_key)
 
-        # Build pages array for Mistral API
-        # Convert from 1-indexed to 0-indexed
-        start = start_page - 1
-        # Build range list (Mistral expects array of page numbers, 0-indexed)
-        # end_page is inclusive in 1-indexed input, so we use it directly as the upper bound
-        pages_to_process = list(range(start, end_page))
+        # Encode document for OCR (only if needed)
+        base64_pdf = base64.b64encode(file_content).decode('utf-8')
+
+        # Build pages array for Mistral API (only uncached pages)
+        # Convert from 1-indexed to 0-indexed for Mistral API
+        pages_to_process = [p - 1 for p in sorted(pages_to_ocr)]
 
         # Prepare OCR request parameters
         # Use detected MIME type for document type
@@ -205,17 +236,33 @@ def read_buyer_attachment_doc(
         if ocr_response is None:
             raise Exception("Failed to get OCR response after retries")
 
-        # Extract text from response
-        extracted_text = []
-        pages_read = []
-
+        # Extract text from OCR response and cache it
+        newly_extracted = {}
         for page in ocr_response.pages:
-            page_num = page.index  # 0-indexed in response
+            page_num = page.index + 1  # Convert to 1-indexed
             markdown_text = page.markdown
 
             if markdown_text:
-                extracted_text.append(f"--- Page {page_num + 1} ---\n{markdown_text}")
-                pages_read.append(page_num + 1)  # Convert to 1-indexed for return
+                newly_extracted[page_num] = markdown_text
+                # Cache this page's OCR result
+                cache.set_ocr_result(tender_id, row_id, page_num, markdown_text)
+
+        # Log cache statistics
+        if len(cached_pages) > 0 and len(newly_extracted) > 0:
+            print(f"[CACHE PARTIAL] OCR: {tender_id}_{row_id} - {len(cached_pages)} from cache, {len(newly_extracted)} new from API")
+        elif len(newly_extracted) > 0:
+            print(f"[CACHE MISS] OCR: {tender_id}_{row_id} pages {start_page}-{end_page} - {len(newly_extracted)} pages from API (cached for future use)")
+
+        # Combine cached pages and newly extracted pages
+        all_pages = {**cached_pages, **newly_extracted}
+
+        extracted_text = []
+        pages_read = []
+        for page_num in sorted(requested_pages):
+            if page_num in all_pages:
+                text = all_pages[page_num]
+                extracted_text.append(f"--- Page {page_num} ---\n{text}")
+                pages_read.append(page_num)
 
         combined_text = "\n\n".join(extracted_text)
 
@@ -233,7 +280,10 @@ def read_buyer_attachment_doc(
             "pages_read": pages_read,
             "file_size": file_size,
             "success": True,
-            "cached": cached
+            "cached": cached,
+            "ocr_cached": len(cached_pages) > 0,
+            "ocr_cache_hits": len(cached_pages),
+            "ocr_new_pages": len(newly_extracted)
         }
 
     except Exception as e:

@@ -27,6 +27,8 @@ interface TaskCardProps {
 
 export function TaskCard({
   taskId,
+  taskCode,
+  taskName,
   severity,
   events,
   result,

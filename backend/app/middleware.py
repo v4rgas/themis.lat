@@ -125,6 +125,76 @@ class WebSocketStreamingMiddleware(AgentMiddleware):
 
         return None
 
+    def _format_tool_args(self, tool_name: str, args: dict) -> str:
+        """Format tool arguments for display"""
+        if tool_name == "read_buyer_attachments_table":
+            tender_id = args.get("tender_id", "unknown")
+            return f"tender_id='{tender_id}'"
+        elif tool_name == "read_buyer_attachment_doc":
+            tender_id = args.get("tender_id", "unknown")
+            row_id = args.get("row_id", "unknown")
+            start = args.get("start_page", "?")
+            end = args.get("end_page", "?")
+            return f"tender='{tender_id}', row={row_id}, pages={start}-{end}"
+        elif tool_name == "read_award_result":
+            tender_id = args.get("id", "unknown")
+            return f"id='{tender_id}'"
+        elif tool_name == "read_award_result_attachment_doc":
+            tender_id = args.get("id", "unknown")
+            row_id = args.get("row_id", "unknown")
+            start = args.get("start_page", "?")
+            end = args.get("end_page", "?")
+            return f"id='{tender_id}', row={row_id}, pages={start}-{end}"
+        elif tool_name == "get_plan":
+            user_request = args.get("user_request", "unknown")
+            # Truncate long requests
+            if len(user_request) > 50:
+                user_request = user_request[:47] + "..."
+            return f"request='{user_request}'"
+        else:
+            # Generic formatting
+            return ", ".join(f"{k}='{v}'" for k, v in list(args.items())[:2])
+
+    def _parse_tool_result(self, tool_name: str, result: ToolMessage) -> str:
+        """Parse tool result to extract key information"""
+        try:
+            content = str(result.content) if hasattr(result, 'content') else str(result)
+
+            if tool_name == "read_buyer_attachments_table":
+                # Try to count documents mentioned
+                import re
+                doc_count = content.lower().count('document')
+                if doc_count > 0:
+                    return f"Encontrados documentos en la tabla"
+                return "Consulta de tabla completada"
+
+            elif tool_name == "read_buyer_attachment_doc":
+                # Check for page/character count
+                if "página" in content or "page" in content:
+                    return "Documento procesado con OCR"
+                return "Extracción de texto completada"
+
+            elif tool_name == "read_award_result":
+                if "adjudicado" in content.lower() or "proveedor" in content.lower():
+                    return "Información de adjudicación obtenida"
+                return "Resultado de adjudicación consultado"
+
+            elif tool_name == "read_award_result_attachment_doc":
+                return "Documento de adjudicación procesado"
+
+            elif tool_name == "get_plan":
+                if "paso" in content.lower() or "step" in content.lower():
+                    return "Plan de investigación generado"
+                return "Plan obtenido"
+
+            else:
+                # Generic result
+                result_len = len(content)
+                return f"Resultado obtenido ({result_len} caracteres)"
+
+        except Exception as e:
+            return "Resultado obtenido"
+
     def wrap_tool_call(
         self,
         request: ToolCallRequest,
@@ -134,7 +204,7 @@ class WebSocketStreamingMiddleware(AgentMiddleware):
         Hook que envuelve CADA ejecución de tool.
 
         Se ejecuta ANTES y DESPUÉS de invocar el tool.
-        Envía un evento al frontend indicando qué tool se está ejecutando.
+        Envía eventos detallados sobre qué tool se ejecuta y sus resultados.
 
         Args:
             request: Request del tool con información del tool_call y state
@@ -145,8 +215,14 @@ class WebSocketStreamingMiddleware(AgentMiddleware):
         """
         session_id = request.state.get("session_id")
         tool_name = request.tool_call["name"]
+        tool_args = request.tool_call.get("args", {})
 
-        # ANTES de ejecutar el tool
+        # Obtener task_info del state
+        task_info = request.state.get("task_info", {})
+        task_id = task_info.get("id", "")
+        task_prefix = f"[TASK {task_id}] " if task_id else ""
+
+        # ANTES de ejecutar el tool - Enviar detalles del tool
         if session_id:
             try:
                 task_info = request.state.get("task_info", {})
@@ -159,27 +235,43 @@ class WebSocketStreamingMiddleware(AgentMiddleware):
                 )
                 message = f"{task_prefix}{base_message}"
 
-                # Enviar evento por websocket
                 send_ws_event_sync(
                     session_id,
                     {
                         "type": "log",
-                        "message": message,
+                        "message": tool_call_msg,
                         "tool": tool_name,
                         "timestamp": datetime.now().isoformat(),
                     }
                 )
-                print(f"[MIDDLEWARE] Sent log event: {message} ({tool_name})")
+                print(f"[MIDDLEWARE] Tool call: {tool_call_msg}")
             except Exception as e:
-                print(f"[MIDDLEWARE] Error sending tool event: {e}")
+                print(f"[MIDDLEWARE] Error sending tool call event: {e}")
                 import traceback
                 traceback.print_exc()
 
         # Ejecutar el tool
         result = handler(request)
 
-        # DESPUÉS de ejecutar el tool
-        # Aquí podríamos agregar lógica adicional si necesitamos
-        # (por ejemplo, enviar un evento de "tool completed")
+        # DESPUÉS de ejecutar el tool - Enviar resultado
+        if session_id:
+            try:
+                result_summary = self._parse_tool_result(tool_name, result)
+                result_msg = f"{task_prefix}[RESULT] {result_summary}"
+
+                send_ws_event_sync(
+                    session_id,
+                    {
+                        "type": "log",
+                        "message": result_msg,
+                        "tool": tool_name,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+                print(f"[MIDDLEWARE] Tool result: {result_msg}")
+            except Exception as e:
+                print(f"[MIDDLEWARE] Error sending tool result event: {e}")
+                import traceback
+                traceback.print_exc()
 
         return result

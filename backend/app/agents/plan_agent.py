@@ -7,7 +7,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
-from langchain.agents.structured_output import ProviderStrategy
+from langchain.agents.structured_output import ToolStrategy
 
 from app.config import settings
 from app.prompts import plan_agent
@@ -63,7 +63,7 @@ class PlanAgent:
             model=model,
             tools=[],  # No tools needed for planning
             system_prompt=plan_agent.SYS_PROMPT,
-            response_format=ProviderStrategy(PlanOutput),
+            response_format=ToolStrategy(PlanOutput),
         )
 
     def run(self, message: str) -> PlanOutput:
@@ -80,4 +80,12 @@ class PlanAgent:
         result = self.agent.invoke({"messages": [{"role": "user", "content": message}]})
 
         # The structured response is available in the "structured_response" key
+        if "structured_response" not in result:
+            # Debug: Print available keys to understand the issue
+            print(f"WARNING: structured_response not found in result. Available keys: {result.keys()}")
+            # Raise a more informative error
+            raise ValueError(
+                f"Agent did not return structured_response. Available keys: {list(result.keys())}. "
+                f"This may indicate the agent failed to complete successfully."
+            )
         return result["structured_response"]

@@ -1,4 +1,5 @@
 {
   "project-name": "Themis",
-  "project-description-spanish": "Sistema automatizado de exploración y auditoría de licitaciones públicas sospechosas o que incumplen normativas"
+  "project-description-spanish": "Sistema automatizado de exploración y auditoría de licitaciones públicas sospechosas o que incumplen normativas",
+  "deploy-url": "https://themis.lat"
 }

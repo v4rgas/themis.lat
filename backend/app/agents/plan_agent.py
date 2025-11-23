@@ -13,8 +13,8 @@ from app.prompts import plan_agent
 
 class PlanOutput(BaseModel):
     """Structured output for plan generation"""
-    tasks: List[str] =  Field(
-        description="Detailed instruction for the agent to execute this task"
+    steps: List[str] =  Field(
+        description="Detailed instruction for the agent to execute this task step by step"
     )
 
 

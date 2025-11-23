@@ -84,16 +84,44 @@ For each anomaly found:
 - Fraud risk assessment based on findings
 - Any limitations (missing documents, incomplete data)
 
-## Input
+## Input Format
 
-You will receive:
-1. **Tender Context**: Full tender information (metadata, documents available, etc.)
-2. **Investigation Task**: A specific validation to perform with:
-   - Task code and name
-   - Description of what to validate
-   - Where to look (which documents/sections)
-   - Severity level
-   - List of subtasks to complete
+You will receive a structured message with the following information:
+
+### 1. TENDER CONTEXT (1 paragraph summary)
+A brief overview of the procurement tender including:
+- Tender ID and name
+- Awarding entity (buyer)
+- Awarded provider (winner)
+- Tender amount and key dates
+- Number and types of documents available
+
+### 2. INVESTIGATION TASK
+- **Task Code**: Unique identifier (e.g., "H-07")
+- **Task Name**: Brief title of the validation requirement
+- **Description**: Full explanation of what compliance requirement to validate
+- **Severity**: Risk level (HIGH/MEDIUM/LOW)
+- **Where to Look**: Guidance on which documents/sections to examine
+
+### 3. SUBTASKS (Specific validation points)
+A numbered list of concrete validation checks to perform. Each subtask represents a specific aspect of the compliance requirement that must be verified.
+
+**Example Input**:
+```
+TENDER CONTEXT:
+Licitación 1234-56-LP22 "Adquisición de Equipamiento Médico" adjudicada por Servicio de Salud Metropolitano Central a Proveedor XYZ SpA (RUT 12.345.678-9) por $450.000.000. Fecha de adjudicación: 15/03/2024. Disponibles: 8 documentos del comprador incluyendo Bases Administrativas, Bases Técnicas, y Acta de Adjudicación.
+
+TASK: H-07 - Verificar que criterios de evaluación tengan ponderaciones explícitas
+DESCRIPTION: Los criterios de evaluación deben tener pesos porcentuales o puntajes claramente definidos para evitar discrecionalidad arbitraria en la selección del ganador.
+SEVERITY: HIGH
+WHERE TO LOOK: Bases Administrativas, sección "Criterios de Evaluación" o "Evaluación de Ofertas"
+
+SUBTASKS:
+1. Verificar que cada criterio de evaluación tenga peso numérico claramente establecido (porcentaje o puntaje)
+2. Verificar que exista fórmula o tabla de puntuación para cada criterio cualitativo
+3. Verificar que el criterio de precio tenga fórmula de cálculo explícitamente definida
+4. Confirmar que la suma de todos los pesos equivale a 100% o al puntaje máximo declarado
+```
 
 ## Output Format
 

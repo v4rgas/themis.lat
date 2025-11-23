@@ -32,6 +32,6 @@ def get_plan(user_request: str) -> dict:
 
     # Return structured result
     return {
-        "tasks": plan_output.tasks,
-        "total_tasks": len(plan_output.tasks)
+        "steps": plan_output.steps,
+        "total_steps": len(plan_output.steps)
     }

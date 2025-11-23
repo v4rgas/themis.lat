@@ -10,12 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource-variable/atkinson-hyperlegible-mono": "^5.2.5",
+    "@fontsource/atkinson-hyperlegible-mono": "^5.2.10",
     "@uwdata/mosaic-core": "^0.21.1",
     "@uwdata/mosaic-spec": "^0.21.1",
     "@uwdata/mosaic-sql": "^0.21.1",
     "@uwdata/vgplot": "^0.21.1",
     "embedding-atlas": "^0.13.0",
     "lucide-react": "^0.554.0",
+    "motion": "^12.23.24",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6"

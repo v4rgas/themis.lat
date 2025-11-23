@@ -1,18 +1,150 @@
 .task-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--shadow-color);
+  background: #0f2939;
+  border: 1px solid #164b6b;
   border-radius: 8px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: cardSlideIn 0.3s ease-out;
+  font-family: 'Atkinson Hyperlegible Mono Variable', monospace;
 }
 
-.task-card:hover {
-  border-color: var(--accent-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.task-card-mint {
+  background-color: #1A4D3F;
+  border-color: #2A6D5F;
+  color: #ffffff;
+}
+
+.task-card-mint .task-code,
+.task-card-mint .task-card-name,
+.task-card-mint .task-event-message,
+.task-card-mint .task-result-summary {
+  color: #ffffff;
+}
+
+.task-card-mint .task-severity {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.task-card-mint .task-card-events-header,
+.task-card-mint .task-event-time,
+.task-card-mint .task-result-findings {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.task-card-mint .task-card-status {
+  color: #ffffff;
+}
+
+.task-card-mint .status-dot {
+  background-color: #ffffff;
+}
+
+.task-card-mint .task-event {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.task-card-mint .task-result-summary {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.task-card-mint .task-card-result {
+  border-top-color: rgba(255, 255, 255, 0.2);
+}
+
+.task-card-green {
+  background-color: #0c1f17;
+  border-color: #163328;
+  color: #ffffff;
+}
+
+.task-card-green .task-code,
+.task-card-green .task-card-name,
+.task-card-green .task-event-message,
+.task-card-green .task-result-summary {
+  color: #e5fbeb;
+}
+
+.task-card-green .task-severity {
+  background: rgba(76, 195, 138, 0.15);
+  color: #4cc38a;
+}
+
+.task-card-green .task-card-events-header,
+.task-card-green .task-event-time,
+.task-card-green .task-result-findings {
+  color: rgba(76, 195, 138, 0.8);
+}
+
+.task-card-green .task-card-status {
+  color: #4cc38a;
+}
+
+.task-card-green .status-dot {
+  background-color: #4cc38a;
+}
+
+.task-card-green .task-event {
+  background: rgba(48, 164, 108, 0.1);
+}
+
+.task-card-green .task-event-result {
+  background: rgba(48, 164, 108, 0.15);
+  border-left-color: #30a46c;
+}
+
+.task-card-green .task-result-summary {
+  background: rgba(48, 164, 108, 0.1);
+}
+
+.task-card-green .task-card-result {
+  border-top-color: rgba(48, 164, 108, 0.3);
+}
+
+.task-card-green .task-card-events-list::-webkit-scrollbar-track {
+  background: #0c1f17;
+}
+
+.task-card-green .task-card-events-list::-webkit-scrollbar-thumb {
+  background: #163328;
+}
+
+.task-card-green .task-card-events-list::-webkit-scrollbar-thumb:hover {
+  background: #1d3e31;
+}
+
+.task-card:hover:not(.task-card-completed):not(.task-card-green) {
+  border-color: #38b9d9;
+  box-shadow: 0 4px 12px rgba(56, 185, 217, 0.2);
+  background: #0f2939;
+}
+
+.task-card-green:hover {
+  border-color: #30a46c;
+  box-shadow: 0 4px 12px rgba(48, 164, 108, 0.2);
+}
+
+.task-card-completed {
+  animation: bubbleUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  order: -1;
+}
+
+@keyframes bubbleUp {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-20px) scale(1.02);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
 .task-card-header {
@@ -31,9 +163,9 @@
 .task-code {
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #e0f2fe;
   letter-spacing: 0.5px;
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-family: 'Atkinson Hyperlegible Mono Variable', monospace;
 }
 
 .task-severity {
@@ -41,7 +173,8 @@
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(22, 75, 107, 0.3);
+  color: #2388aa;
 }
 
 .task-card-status {
@@ -59,9 +192,19 @@
   display: inline-block;
 }
 
+.status-checkmark {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.task-card-green .status-checkmark {
+  color: #4cc38a;
+}
+
 .task-card-name {
   font-size: 0.85rem;
-  color: var(--text-primary);
+  color: #e0f2fe;
   line-height: 1.4;
   margin-bottom: 4px;
 }
@@ -72,7 +215,7 @@
 
 .task-card-events-header {
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: #2ba3c2;
   font-weight: 600;
   margin-bottom: 8px;
   text-transform: uppercase;
@@ -92,23 +235,23 @@
 }
 
 .task-card-events-list::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: #0c1820;
   border-radius: 3px;
 }
 
 .task-card-events-list::-webkit-scrollbar-thumb {
-  background: var(--shadow-color);
+  background: #1a5d7e;
   border-radius: 3px;
 }
 
 .task-card-events-list::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+  background: #2388aa;
 }
 
 .task-event {
   padding: 6px 8px;
   border-radius: 4px;
-  background: var(--bg-primary);
+  background: #0c1820;
   border-left: 2px solid transparent;
   font-size: 0.75rem;
   display: flex;
@@ -117,7 +260,7 @@
 }
 
 .task-event-log {
-  border-left-color: var(--accent-primary);
+  border-left-color: #38b9d9;
 }
 
 .task-event-result {
@@ -132,12 +275,12 @@
 
 .task-event-time {
   font-size: 0.7rem;
-  color: var(--text-secondary);
-  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  color: #1a5d7e;
+  font-family: 'Atkinson Hyperlegible Mono Variable', monospace;
 }
 
 .task-event-message {
-  color: var(--text-primary);
+  color: #e0f2fe;
   line-height: 1.3;
   word-break: break-word;
 }
@@ -145,7 +288,7 @@
 .task-card-result {
   margin-top: 8px;
   padding-top: 12px;
-  border-top: 1px solid var(--shadow-color);
+  border-top: 1px solid #164b6b;
 }
 
 .task-result-status {
@@ -169,16 +312,16 @@
 
 .task-result-findings {
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: #2388aa;
   margin-bottom: 8px;
 }
 
 .task-result-summary {
   font-size: 0.75rem;
-  color: var(--text-primary);
+  color: #e0f2fe;
   line-height: 1.5;
   padding: 8px;
-  background: var(--bg-primary);
+  background: #0c1820;
   border-radius: 4px;
   max-height: 150px;
   overflow-y: auto;

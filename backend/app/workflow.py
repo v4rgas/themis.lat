@@ -297,7 +297,7 @@ INVESTIGATION TASKS TO RANK ({len(state["investigation_tasks"])}):
             # Add all tasks
             for task in state["investigation_tasks"]:
                 tender_context += f"""
-Task {task["id"]} - {task["code"]}: {task["name"]}
+{task.get("title", "Unknown")} - {task["code"]}: {task["name"]}
 - Description: {task["desc"]}
 - Where to look: {task["where_to_look"]}
 - Severity: {task["severity"]}
@@ -351,11 +351,11 @@ Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
             )
             for i, task in enumerate(state["ranked_tasks"], 1):
                 task_summary = (
-                    f"#{i}: Task {task['id']} - {task['code']} ({task['name'][:60]}...)"
+                    f"#{i}: {task.get('title', 'Unknown')} - {task['code']} ({task['name'][:60]}...)"
                 )
                 self._send_log(session_id, task_summary)
                 print(
-                    f"  {i}. Task {task['id']} ({task['code']}): {task['name'][:50]}..."
+                    f"  {i}. {task.get('title', 'Unknown')} ({task['code']}): {task['name'][:50]}..."
                 )
 
         except Exception as e:
@@ -402,7 +402,7 @@ Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
             # Log each task being queued
             self._send_log(
                 session_id,
-                f"Queuing investigation {idx + 1}/{len(state['ranked_tasks'])}: Task {task['id']} - {task['code']}",
+                f"Queuing investigation {idx + 1}/{len(state['ranked_tasks'])}: {task.get('title', 'Unknown')} - {task['code']}",
             )
 
             task_input = {
@@ -435,11 +435,11 @@ Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
 
         self._send_log(
             session_id,
-            f"Investigation {investigation_id} starting for Task {task['id']} ({task_code})...",
+            f"Investigation {investigation_id} starting for {task.get('title', 'Unknown')} ({task_code})...",
             task_code=task_code,
         )
         print(
-            f"Investigation {investigation_id} starting for Task {task['id']} ({task_code})..."
+            f"Investigation {investigation_id} starting for {task.get('title', 'Unknown')} ({task_code})..."
         )
 
         try:
@@ -451,6 +451,7 @@ Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
             # Prepare message for investigation
             tender_context = inputs.get("tender_context")
             task_id = task.get("id", 0)
+            task_title = task.get("title", "Unknown title")
             task_name = task.get("name", "Unknown task")
             task_desc = task.get("desc", "No description")
             task_where = task.get("where_to_look", "Not specified")
@@ -460,7 +461,7 @@ Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
             # Log subtask information
             self._send_log(
                 session_id,
-                f"Task {task_id}: Validating {len(task_subtasks)} subtasks",
+                f"{task_title}: Validating {len(task_subtasks)} subtasks",
                 task_code=task_code,
             )
 
@@ -499,7 +500,7 @@ Please investigate this task systematically and report your findings.
             # Run investigation (reusing FraudDetectionAgent but with task-based input)
             self._send_log(
                 session_id,
-                f"Task {task['id']}: Agent starting deep investigation...",
+                f"{task_title}: Agent starting deep investigation...",
                 task_code=task_code,
             )
             detection_input = FraudDetectionInput(
@@ -517,7 +518,7 @@ Please investigate this task systematically and report your findings.
             # Log agent completion
             self._send_log(
                 session_id,
-                f"Task {task['id']}: Agent completed. Found {len(result.anomalies)} anomalies",
+                f"{task_title}: Agent completed. Found {len(result.anomalies)} anomalies",
                 task_code=task_code,
             )
 
@@ -533,11 +534,11 @@ Please investigate this task systematically and report your findings.
 
             self._send_log(
                 session_id,
-                f"Task {task['id']} investigation complete. Validation passed: {task_result.validation_passed}",
+                f"{task_title} investigation complete. Validation passed: {task_result.validation_passed}",
                 task_code=task_code,
             )
             print(
-                f"Task {task['id']} investigation complete. Validation passed: {task_result.validation_passed}"
+                f"{task_title} investigation complete. Validation passed: {task_result.validation_passed}"
             )
 
             # Return state update - this will be accumulated via the 'add' reducer
@@ -549,15 +550,15 @@ Please investigate this task systematically and report your findings.
             error_msg = f"{type(e).__name__}: {str(e)}"
             self._send_log(
                 session_id,
-                f"ERROR: Task {task['id']} investigation failed - {error_msg}",
+                f"ERROR: {task_title} investigation failed - {error_msg}",
                 task_code=task_code,
             )
             self._send_log(
                 session_id,
-                f"Task {task['id']}: Marking investigation as failed",
+                f"{task_title}: Marking investigation as failed",
                 task_code=task_code,
             )
-            print(f"Task {task['id']} investigation failed: {e}")
+            print(f"{task_title} investigation failed: {e}")
             traceback.print_exc()
             # Return error result
             error_result = TaskInvestigationOutput(

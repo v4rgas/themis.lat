@@ -3,9 +3,11 @@ Fraud Detection Agent - Deep investigation of individual tenders for fraud indic
 """
 
 from typing import Dict, Any
+from typing_extensions import NotRequired
 
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentState
 from langchain.agents.structured_output import ToolStrategy
 
 from app.config import settings
@@ -16,6 +18,15 @@ from app.tools.read_buyer_attachments_table import read_buyer_attachments_table
 from app.tools.read_buyer_attachment_doc import read_buyer_attachment_doc
 from app.tools.read_award_result import read_award_result
 from app.tools.read_award_result_attachment_doc import read_award_result_attachment_doc
+from app.middleware import WebSocketStreamingMiddleware
+
+
+# Custom state schema para pasar session_id y task_info al middleware
+class FraudAgentState(AgentState):
+    """Custom state schema que incluye session_id y task_info"""
+
+    session_id: NotRequired[str]
+    task_info: NotRequired[Dict[str, Any]]
 
 
 class FraudDetectionAgent:
@@ -76,15 +87,22 @@ class FraudDetectionAgent:
             read_award_result_attachment_doc,
         ]
 
-        # Create fraud detection agent with structured output
+        # Create fraud detection agent with structured output and middleware
         self.agent = create_agent(
             model=model,
             tools=tools,
             system_prompt=fraud_detection_agent.SYS_PROMPT,
             response_format=ToolStrategy(FraudDetectionOutput),
+            middleware=[WebSocketStreamingMiddleware()],
+            state_schema=FraudAgentState,
         )
 
-    def run(self, input_data: FraudDetectionInput) -> FraudDetectionOutput:
+    def run(
+        self,
+        input_data: FraudDetectionInput,
+        session_id: str = None,
+        task_info: Dict[str, Any] = None,
+    ) -> FraudDetectionOutput:
         """
         Perform deep fraud investigation on a single tender.
 
@@ -135,7 +153,16 @@ INVESTIGATION REQUIREMENTS:
 Investigate systematically and return detailed anomalies with evidence.
 """
 
-        result = self.agent.invoke({"messages": [{"role": "user", "content": message}]})
+        # Prepare state with messages and middleware data
+        state = {"messages": [{"role": "user", "content": message}]}
+
+        # Add session_id and task_info to state for middleware
+        if session_id:
+            state["session_id"] = session_id
+        if task_info:
+            state["task_info"] = task_info
+
+        result = self.agent.invoke(state)
 
         # Return the structured response
         return result["structured_response"]

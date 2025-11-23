@@ -135,17 +135,21 @@ def read_buyer_attachments_table(tender_id: str) -> list[str]:
     soup = get_tender_data_by_id(tender_id)
     href = get_url_for_popup_with_html_id(soup, "imgAdjuntos")
     soup = get_anexos_comprador_page(href)
+    if soup is None:
+        return []
     td_texts = extract_anexos_comprador_from_soup(soup)
     return td_texts
 
 
 def download_buyer_attachment_by_tender_id_and_row_id(
     tender_id: str, row_id: int
-) -> bytes:
+) -> bytes | None:
     """
     Downloads the tender's buyer's attachment by the given tender ID and row ID.
     """
     soup = get_tender_data_by_id(tender_id)
     href = get_url_for_popup_with_html_id(soup, "imgAdjuntos")
     soup = get_anexos_comprador_page(href)
+    if soup is None:
+        return None
     return download_anexo_comprador_by_row_id(href, soup, row_id)

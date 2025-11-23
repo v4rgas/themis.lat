@@ -3,18 +3,29 @@ Ranking Agent - Ranks procurement tenders by fraud risk indicators
 """
 
 from typing import Dict, Any
+from typing_extensions import NotRequired
 
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentState
 from langchain.agents.structured_output import ToolStrategy
 
 from app.config import settings
 from app.prompts import ranking_agent
-from app.schemas import RankingInput, RankingOutput, TaskRankingOutput
+from app.schemas import RankingInput, RankingOutput, TaskClassificationOutput
 from app.tools.read_buyer_attachments_table import read_buyer_attachments_table
 from app.tools.read_buyer_attachment_doc import read_buyer_attachment_doc
 from app.tools.read_award_result import read_award_result
 from app.tools.read_award_result_attachment_doc import read_award_result_attachment_doc
+from app.middleware import WebSocketStreamingMiddleware
+
+
+# Custom state schema para pasar session_id y task_info al middleware
+class RankingAgentState(AgentState):
+    """Custom state schema que incluye session_id y task_info"""
+
+    session_id: NotRequired[str]
+    task_info: NotRequired[Dict[str, Any]]
 
 
 class RankingAgent:
@@ -73,30 +84,35 @@ class RankingAgent:
             read_award_result_attachment_doc,
         ]
 
-        # Create ranking agent with structured output
+        # Create ranking agent with structured output and middleware
         self.agent = create_agent(
             model=model,
             tools=tools,
             system_prompt=ranking_agent.SYS_PROMPT,
-            response_format=ToolStrategy(TaskRankingOutput),
+            response_format=ToolStrategy(TaskClassificationOutput),
+            middleware=[WebSocketStreamingMiddleware()],
+            state_schema=RankingAgentState,
         )
 
-    def run(self, input_data: RankingInput) -> TaskRankingOutput:
+    def run(
+        self, input_data: RankingInput, session_id: str = None
+    ) -> TaskClassificationOutput:
         """
-        Analyze tender context and rank items by fraud risk.
+        Analyze tender context and classify which investigation tasks are feasible.
 
         The agent will:
         1. Analyze the tender context (name, date, bases, technical specs)
-        2. Identify risk indicators
-        3. Calculate risk scores
-        4. Rank tenders by fraud likelihood
-        5. Return top 5 with detailed assessments
+        2. Check document availability using tools
+        3. Assess data completeness for each task
+        4. Filter out tasks that lack necessary data
+        5. Return list of feasible task IDs (5-11 tasks)
 
         Args:
             input_data: RankingInput with tender context
+            session_id: Optional session ID for WebSocket streaming
 
         Returns:
-            RankingOutput: Top 5 ranked items with risk assessments
+            TaskClassificationOutput: List of feasible task IDs with rationale
 
         Example:
             >>> agent = RankingAgent()
@@ -108,11 +124,11 @@ class RankingAgent:
             ...     bases_tecnicas="Intel Core i7-12700, 16GB RAM, specific model required"
             ... )
             >>> result = agent.run(input_data)
-            >>> print(result.ranked_items[0].risk_score)
-            0.85
+            >>> print(result.feasible_task_ids)
+            [1, 2, 3, 4, 5, 7, 8, 9, 11]
         """
         # Format the message with tender context
-        message = f"""Analyze and rank the following tender by fraud risk indicators:
+        message = f"""Classify which investigation tasks are FEASIBLE to validate for this tender:
 
 Tender ID: {input_data.tender_id}
 Tender Name: {input_data.tender_name}
@@ -126,11 +142,20 @@ Bases Técnicas (Technical Specifications):
 
 Additional Context: {input_data.additional_context}
 
-Please analyze this tender for risk indicators and return a ranking of items to investigate.
-Focus on identifying patterns that suggest potential fraud or corruption.
+Please classify which investigation tasks are feasible given the available data.
+Return ONLY the IDs of tasks that can be validated (5-11 tasks).
+Focus on filtering OUT tasks that are impossible due to missing critical data or documents.
 """
 
-        result = self.agent.invoke({"messages": [{"role": "user", "content": message}]})
+        # Prepare state with messages and middleware data
+        state = {"messages": [{"role": "user", "content": message}]}
+
+        # Add session_id to state for middleware
+        if session_id:
+            state["session_id"] = session_id
+            state["task_info"] = {"name": "Clasificación de tareas factibles"}
+
+        result = self.agent.invoke(state)
 
         # Return the structured response
         return result["structured_response"]

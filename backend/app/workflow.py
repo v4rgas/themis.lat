@@ -35,7 +35,7 @@ from app.utils.build_ranking_input import (
     fetch_and_extract_documents,
 )
 from app.investigation_tasks import INVESTIGATION_TASKS, InvestigationTask
-from app.schemas import TaskRankingOutput, TaskInvestigationOutput
+from app.schemas import TaskClassificationOutput, TaskInvestigationOutput
 from app.utils.websocket_manager import manager
 
 
@@ -306,17 +306,19 @@ Task {task["id"]} - {task["code"]}: {task["name"]}
 
             tender_context += """
 
-Rank the TOP 5 tasks by priority. Consider document availability, severity, and feasibility.
-Return the ranked tasks with rationale.
+Classify which tasks are FEASIBLE to validate given available data (5-11 tasks).
+Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
 """
 
             # Run ranking agent
-            self._send_log(session_id, "Ranking agent analyzing tender context...")
+            self._send_log(
+                session_id, "Classification agent filtering feasible tasks..."
+            )
             self._send_log(
                 session_id,
                 f"Assembling context: {len(state['investigation_tasks'])} tasks, {len(state['tender_documents'])} documents",
             )
-            ranking_result: TaskRankingOutput = self.ranking_agent.run(
+            classification_result: TaskClassificationOutput = self.ranking_agent.run(
                 RankingInput(
                     tender_id=state["input_data"].tender_id,
                     tender_name=state["input_data"].tender_name,
@@ -324,23 +326,28 @@ Return the ranked tasks with rationale.
                     bases=tender_context,
                     bases_tecnicas="",
                     additional_context={},
-                )
+                ),
+                session_id=session_id,
             )
             self._send_log(
                 session_id,
-                f"Ranking agent completed. Generated {len(ranking_result.ranked_tasks)} ranked tasks",
+                f"Classification agent completed. Selected {len(classification_result.feasible_task_ids)} feasible tasks",
             )
 
-            # Extract ranked tasks and convert to dictionaries
-            ranked_task_objects = ranking_result.ranked_tasks[:5]  # Top 5
-            state["ranked_tasks"] = [task.model_dump() for task in ranked_task_objects]
+            # Filter tasks from investigation_tasks using the feasible IDs
+            feasible_ids = classification_result.feasible_task_ids
+            state["ranked_tasks"] = [
+                task
+                for task in state["investigation_tasks"]
+                if task["id"] in feasible_ids
+            ]
 
             self._send_log(
                 session_id,
-                f"Task ranking complete. Top {len(state['ranked_tasks'])} tasks selected:",
+                f"Task classification complete. {len(state['ranked_tasks'])} feasible tasks selected:",
             )
             print(
-                f"Task ranking complete. Top {len(state['ranked_tasks'])} tasks selected."
+                f"Task classification complete. {len(state['ranked_tasks'])} feasible tasks selected."
             )
             for i, task in enumerate(state["ranked_tasks"], 1):
                 task_summary = (
@@ -354,7 +361,7 @@ Return the ranked tasks with rationale.
         except Exception as e:
             import traceback
 
-            self._send_log(session_id, f"ERROR: Task ranking failed - {str(e)}")
+            self._send_log(session_id, f"ERROR: Task classification failed - {str(e)}")
             self._send_log(
                 session_id, "Using fallback strategy: selecting first 5 tasks by ID"
             )
@@ -501,7 +508,11 @@ Please investigate this task systematically and report your findings.
                 full_context={"task": task, "message": message},
             )
 
-            result = agent.run(detection_input)
+            result = agent.run(
+                detection_input,
+                session_id=session_id,
+                task_info={"id": task_id, "code": task_code, "name": task_name},
+            )
 
             # Log agent completion
             self._send_log(

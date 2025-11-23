@@ -134,6 +134,25 @@ class TaskRankingOutput(BaseModel):
     ranking_rationale: str = Field(description="Explanation of ranking criteria and order")
 
 
+class TaskClassificationOutput(BaseModel):
+    """Output from classifying feasible investigation tasks"""
+    feasible_task_ids: List[int] = Field(
+        description=(
+            "List of task IDs that are FEASIBLE to validate given available data. "
+            "Include tasks where we have sufficient documents and information to perform validation. "
+            "Can include anywhere from 5-11 task IDs depending on data availability. "
+            "Only exclude tasks that are completely impossible due to missing critical data."
+        )
+    )
+    classification_rationale: str = Field(
+        description=(
+            "Explanation of classification criteria. "
+            "For each excluded task, explain WHY it's not feasible (missing documents, insufficient data, etc.). "
+            "For included tasks, briefly note what makes them feasible."
+        )
+    )
+
+
 class TaskInvestigationOutput(BaseModel):
     """Output from investigating a single task"""
     task_id: int = Field(description="Task ID")

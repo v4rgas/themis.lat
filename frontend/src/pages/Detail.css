@@ -1,7 +1,7 @@
 .detail-container {
   width: 100%;
   height: 100vh;
-  background: #0c1820;
+  background: var(--detail-bg);
   padding: 40px 20px;
   font-family: system-ui, -apple-system, sans-serif;
   position: relative;
@@ -206,8 +206,8 @@
 }
 
 .console-header {
-  background: #0d1f2e;
-  border: 1px solid #164b6b;
+  background: var(--detail-console-bg);
+  border: 1px solid var(--detail-console-border);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
   padding: 12px 16px;
@@ -221,7 +221,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   font-size: 0.85rem;
   font-weight: 500;
 }
@@ -242,11 +242,11 @@
 .wave-text {
   background: linear-gradient(
     90deg,
-    #e0f2fe 0%,
-    #e0f2fe 40%,
-    #38b9d9 50%,
-    #38b9d9 60%,
-    #e0f2fe 100%
+    var(--detail-console-text) 0%,
+    var(--detail-console-text) 40%,
+    var(--detail-console-accent) 50%,
+    var(--detail-console-accent) 60%,
+    var(--detail-console-text) 100%
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
@@ -265,24 +265,24 @@
 }
 
 .console-icon {
-  color: #38b9d9;
+  color: var(--detail-console-accent);
   font-size: 1rem;
 }
 
 .console-status {
-  color: #27ae60;
+  color: var(--detail-success);
   font-size: 0.75rem;
   margin-left: 8px;
 }
 
 .console-info {
-  color: #2ba3c2;
+  color: var(--detail-console-text-dim);
   font-size: 0.75rem;
 }
 
 .timeline-container {
-  background: #0c1820;
-  border: 1px solid #164b6b;
+  background: var(--detail-bg);
+  border: 1px solid var(--detail-console-border);
   border-radius: 0 0 8px 8px;
   overflow-y: auto;
   flex: 1;
@@ -295,20 +295,20 @@
 }
 
 .timeline-container::-webkit-scrollbar-track {
-  background: #0c1820;
+  background: var(--detail-bg);
 }
 
 .timeline-container::-webkit-scrollbar-thumb {
-  background: #1a5d7e;
+  background: var(--detail-scrollbar);
   border-radius: 5px;
 }
 
 .timeline-container::-webkit-scrollbar-thumb:hover {
-  background: #2388aa;
+  background: var(--detail-scrollbar-hover);
 }
 
 .timeline-item {
-  border-bottom: 1px solid #0f2939;
+  border-bottom: 1px solid var(--detail-item-bg);
 }
 
 .timeline-item:last-child {
@@ -326,7 +326,7 @@
 }
 
 .log-node:hover {
-  background: #0f2939;
+  background: var(--detail-item-bg);
 }
 
 .log-node.log {
@@ -334,13 +334,13 @@
 }
 
 .log-node.result {
-  background: rgba(39, 174, 96, 0.05);
-  border-left: 3px solid #27ae60;
+  background: color-mix(in srgb, var(--detail-success) 5%, transparent);
+  border-left: 3px solid var(--detail-success);
 }
 
 .log-node.error {
-  background: rgba(231, 76, 60, 0.05);
-  border-left: 3px solid #e74c3c;
+  background: color-mix(in srgb, var(--detail-error) 5%, transparent);
+  border-left: 3px solid var(--detail-error);
 }
 
 .node-dot {
@@ -364,28 +364,28 @@
 }
 
 .node-timestamp {
-  color: #1a5d7e;
+  color: var(--detail-timestamp);
   font-size: 0.75rem;
   flex-shrink: 0;
 }
 
 .node-type {
-  color: #2388aa;
+  color: var(--detail-type);
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
 }
 
 .log-node.result .node-type {
-  color: #27ae60;
+  color: var(--detail-success);
 }
 
 .log-node.error .node-type {
-  color: #e74c3c;
+  color: var(--detail-error);
 }
 
 .node-message {
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   font-size: 0.8rem;
   font-weight: 400;
   word-break: break-word;
@@ -393,12 +393,12 @@
 }
 
 .log-node.result .node-message {
-  color: #27ae60;
+  color: var(--detail-success);
   font-weight: 500;
 }
 
 .log-node.error .node-message {
-  color: #e74c3c;
+  color: var(--detail-error);
   font-weight: 500;
 }
 
@@ -406,11 +406,11 @@
 .result-details {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #164b6b;
+  border-top: 1px solid var(--detail-console-border);
 }
 
 .result-details h3 {
-  color: #38b9d9;
+  color: var(--detail-console-accent);
   font-size: 0.8rem;
   font-weight: 600;
   margin: 0 0 12px 0;
@@ -420,8 +420,8 @@
 }
 
 .task-result {
-  background: #0f2939;
-  border: 1px solid #164b6b;
+  background: var(--detail-item-bg);
+  border: 1px solid var(--detail-console-border);
   border-radius: 4px;
   padding: 12px;
   margin-bottom: 8px;
@@ -430,13 +430,13 @@
 }
 
 .task-result.failed {
-  border-left: 3px solid #e74c3c;
-  background: rgba(231, 76, 60, 0.05);
+  border-left: 3px solid var(--detail-error);
+  background: color-mix(in srgb, var(--detail-error) 5%, transparent);
 }
 
 .task-result.passed {
-  border-left: 3px solid #27ae60;
-  background: rgba(39, 174, 96, 0.05);
+  border-left: 3px solid var(--detail-success);
+  background: color-mix(in srgb, var(--detail-success) 5%, transparent);
 }
 
 .task-header {
@@ -447,7 +447,7 @@
 }
 
 .task-code {
-  color: #2388aa;
+  color: var(--detail-type);
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -462,34 +462,34 @@
 }
 
 .task-status.passed {
-  background: rgba(39, 174, 96, 0.2);
-  color: #27ae60;
+  background: color-mix(in srgb, var(--detail-success) 20%, transparent);
+  color: var(--detail-success);
 }
 
 .task-status.failed {
-  background: rgba(231, 76, 60, 0.2);
-  color: #e74c3c;
+  background: color-mix(in srgb, var(--detail-error) 20%, transparent);
+  color: var(--detail-error);
 }
 
 .task-name {
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   font-size: 0.8rem;
   margin-bottom: 6px;
   line-height: 1.4;
 }
 
 .task-findings {
-  color: #2388aa;
+  color: var(--detail-type);
   font-size: 0.75rem;
 }
 
 .workflow-summary {
-  background: #0c1820;
-  border: 1px solid #164b6b;
+  background: var(--detail-bg);
+  border: 1px solid var(--detail-console-border);
   border-radius: 4px;
   padding: 16px;
   margin-top: 12px;
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   font-size: 0.75rem;
   line-height: 1.6;
   overflow-x: auto;
@@ -606,8 +606,8 @@
 }
 
 .dialog-content {
-  background: #0d1f2e;
-  border: 1px solid #164b6b;
+  background: var(--detail-console-bg);
+  border: 1px solid var(--detail-console-border);
   border-radius: 8px;
   width: 90vw;
   max-width: 800px;
@@ -616,7 +616,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   font-family: 'Atkinson Hyperlegible Mono Variable', monospace;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   position: fixed;
@@ -660,7 +660,7 @@
 .dialog-title {
   font-size: 1.5rem;
   font-weight: 300;
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   margin: 0 0 24px 0;
   letter-spacing: 0.1em;
   padding-right: 40px;
@@ -683,15 +683,15 @@
 }
 
 .dialog-content .detail-item {
-  border-bottom: 1px solid #164b6b;
+  border-bottom: 1px solid var(--detail-console-border);
 }
 
 .dialog-content .detail-key {
-  color: #2ba3c2;
+  color: var(--detail-console-text-dim);
 }
 
 .dialog-content .detail-value {
-  color: #e0f2fe;
+  color: var(--detail-console-text);
 }
 
 .dialog-close {
@@ -700,7 +700,7 @@
   right: 24px;
   background: none;
   border: none;
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   font-size: 24px;
   cursor: pointer;
   padding: 0;
@@ -714,7 +714,7 @@
 }
 
 .dialog-close:hover {
-  color: #38b9d9;
+  color: var(--detail-console-accent);
   transform: scale(1.1);
 }
 
@@ -760,8 +760,8 @@
   flex-direction: column;
   overflow: hidden;
   height: 100%;
-  background: #0d1f2e;
-  border: 1px solid #164b6b;
+  background: var(--detail-console-bg);
+  border: 1px solid var(--detail-console-border);
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -770,7 +770,7 @@
 .tasks-section-title {
   font-size: 1rem;
   font-weight: 300;
-  color: #e0f2fe;
+  color: var(--detail-console-text);
   margin: 0 0 16px 0;
   letter-spacing: 0.1em;
   font-family: 'Atkinson Hyperlegible Mono Variable', monospace;
@@ -790,16 +790,16 @@
 }
 
 .tasks-grid::-webkit-scrollbar-track {
-  background: #0c1820;
+  background: var(--detail-bg);
 }
 
 .tasks-grid::-webkit-scrollbar-thumb {
-  background: #1a5d7e;
+  background: var(--detail-scrollbar);
   border-radius: 5px;
 }
 
 .tasks-grid::-webkit-scrollbar-thumb:hover {
-  background: #2388aa;
+  background: var(--detail-scrollbar-hover);
 }
 
 @media (max-width: 1200px) {

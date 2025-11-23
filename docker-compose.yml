@@ -9,8 +9,9 @@ services:
       - ./backend/.env
     volumes:
       - ./backend/app:/app/app
-      - ./backend/datasets:/app/datasets
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    depends_on:
+      - postgres
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -27,3 +28,18 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+
+  postgres:
+    image: postgres:17
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data_17:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data_17:

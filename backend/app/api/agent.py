@@ -6,10 +6,14 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
 import asyncio
+import time
 import logging
+from datetime import datetime
 
 from app.workflow import FraudDetectionWorkflow
 from app.utils.websocket_manager import manager
+from app.services.websocket_log_service import get_websocket_messages, has_websocket_messages
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +39,84 @@ class InvestigationResponse(BaseModel):
     message: str = Field(..., description="Status message")
 
 
+def replay_websocket_messages(session_id: str, tender_id: str, replay_speed: float):
+    """
+    Replay saved websocket messages for a tender_id, simulating the original execution.
+    
+    This function reads all saved messages from the database and sends them through
+    the websocket with timing scaled by replay_speed.
+
+    Args:
+        session_id: The session ID for WebSocket communication
+        tender_id: The tender ID to replay messages for
+        replay_speed: Speed multiplier (e.g., 4.0 means 4x faster)
+    """
+    try:
+        # Register tender_id for this session in replay mode (so messages aren't saved again during replay)
+        manager.register_tender_id(session_id, tender_id, is_replay=True)
+        
+        # Get all messages for this tender_id
+        messages = get_websocket_messages(tender_id)
+        
+        if not messages:
+            logger.warning(f"No messages found for tender {tender_id}")
+            asyncio.run(manager.send_observation(session_id, {
+                "type": "error",
+                "message": "No saved messages found for replay",
+                "status": "error"
+            }))
+            return
+        
+        logger.info(f"Replaying {len(messages)} messages for tender {tender_id} at {replay_speed}x speed")
+        
+        # Send first message immediately
+        first_message = messages[0]
+        # Remove the _db_timestamp we added
+        first_message_clean = {k: v for k, v in first_message.items() if k != '_db_timestamp'}
+        asyncio.run(manager.send_observation(session_id, first_message_clean))
+        
+        # Process remaining messages with timing
+        for i in range(1, len(messages)):
+            current_msg = messages[i]
+            previous_msg = messages[i - 1]
+            
+            # Get timestamps
+            current_timestamp = current_msg.get('_db_timestamp') or current_msg.get('timestamp')
+            previous_timestamp = previous_msg.get('_db_timestamp') or previous_msg.get('timestamp')
+            
+            # Calculate sleep duration
+            if current_timestamp and previous_timestamp:
+                try:
+                    current_dt = datetime.fromisoformat(current_timestamp.replace('Z', '+00:00'))
+                    previous_dt = datetime.fromisoformat(previous_timestamp.replace('Z', '+00:00'))
+                    time_diff = (current_dt - previous_dt).total_seconds()
+                    sleep_duration = max(0, time_diff / replay_speed)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Error parsing timestamps, using default delay: {e}")
+                    sleep_duration = 0.1 / replay_speed  # Default 100ms scaled
+            else:
+                # Fallback: use a small default delay
+                sleep_duration = 0.1 / replay_speed
+            
+            # Sleep to simulate timing
+            if sleep_duration > 0:
+                time.sleep(sleep_duration)
+            
+            # Send message (remove _db_timestamp)
+            message_clean = {k: v for k, v in current_msg.items() if k != '_db_timestamp'}
+            asyncio.run(manager.send_observation(session_id, message_clean))
+        
+        logger.info(f"Replay completed for tender {tender_id}")
+        
+    except Exception as e:
+        logger.error(f"Error replaying messages for tender {tender_id}: {e}", exc_info=True)
+        asyncio.run(manager.send_observation(session_id, {
+            "type": "error",
+            "message": f"Replay failed: {str(e)}",
+            "status": "error"
+        }))
+
+
 def run_workflow_sync(session_id: str, tender_id: str):
     """
     Run the fraud detection workflow synchronously.
@@ -47,6 +129,9 @@ def run_workflow_sync(session_id: str, tender_id: str):
         tender_id: The tender ID to investigate
     """
     try:
+        # Register tender_id for message logging
+        manager.register_tender_id(session_id, tender_id)
+        
         # Create workflow instance
         workflow = FraudDetectionWorkflow()
 
@@ -119,13 +204,28 @@ async def start_investigation(
     # Generate session ID if not provided
     session_id = request.session_id or str(uuid.uuid4())
 
-    # Start investigation workflow in background
-    background_tasks.add_task(run_workflow_sync, session_id, request.tender_id)
-
-    return InvestigationResponse(
-        session_id=session_id,
-        message=f"Investigation started. Connect to WebSocket at /ws/{session_id} for real-time updates."
-    )
+    # Check if messages exist for this tender_id
+    if has_websocket_messages(request.tender_id):
+        # Replay existing messages instead of running workflow
+        logger.info(f"Found existing messages for tender {request.tender_id}, starting replay")
+        background_tasks.add_task(
+            replay_websocket_messages, 
+            session_id, 
+            request.tender_id, 
+            settings.websocket_replay_speed
+        )
+        return InvestigationResponse(
+            session_id=session_id,
+            message=f"Replay started. Connect to WebSocket at /ws/{session_id} for real-time updates."
+        )
+    else:
+        # No existing messages, run workflow normally (which will save messages)
+        logger.info(f"No existing messages for tender {request.tender_id}, starting new workflow")
+        background_tasks.add_task(run_workflow_sync, session_id, request.tender_id)
+        return InvestigationResponse(
+            session_id=session_id,
+            message=f"Investigation started. Connect to WebSocket at /ws/{session_id} for real-time updates."
+        )
 
 
 @router.get("/health")

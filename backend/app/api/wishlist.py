@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import logging
+import httpx
 from typing import List
 
 from app.database import get_db
@@ -17,8 +18,56 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def send_discord_notification(email: str, reason: str):
+    """
+    Send a Discord notification when a new wishlist entry is created.
+
+    Args:
+        email: User's email address
+        reason: User's reason for joining
+    """
+    if not settings.discord_webhook_url:
+        logger.info("Discord webhook not configured, skipping notification")
+        return
+
+    try:
+        embed = {
+            "title": "🆕 New Wishlist Entry",
+            "color": 0x5865F2,  # Discord blurple
+            "fields": [
+                {
+                    "name": "Email",
+                    "value": email,
+                    "inline": False
+                },
+                {
+                    "name": "Reason",
+                    "value": reason,
+                    "inline": False
+                }
+            ]
+        }
+
+        payload = {
+            "embeds": [embed]
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                settings.discord_webhook_url,
+                json=payload,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            logger.info(f"Discord notification sent for {email}")
+
+    except Exception as e:
+        # Don't fail the request if Discord notification fails
+        logger.error(f"Failed to send Discord notification: {str(e)}")
+
+
 @router.post("/wishlist", response_model=WishlistResponse, status_code=201)
-def create_wishlist_entry(
+async def create_wishlist_entry(
     wishlist_data: WishlistCreate,
     db: Session = Depends(get_db)
 ):
@@ -47,6 +96,9 @@ def create_wishlist_entry(
         db.refresh(db_wishlist)
 
         logger.info(f"Wishlist entry created for email: {wishlist_data.email}")
+
+        # Send Discord notification (don't await to avoid blocking the response)
+        await send_discord_notification(wishlist_data.email, wishlist_data.reason)
 
         return db_wishlist
 

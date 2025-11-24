@@ -218,6 +218,7 @@ export function Detail() {
     wsRef.current = ws;
   };
 
+  // @ts-expect-error - Kept for future use when wishlist gate is removed
   const startInvestigation = async () => {
     setIsInvestigating(true);
     setLogs([]);
@@ -420,6 +421,7 @@ export function Detail() {
   );
 }
 
+// @ts-expect-error - Kept for future use when wishlist gate is removed
 function Summary({
   nodeData,
   isInvestigating,

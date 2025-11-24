@@ -16,4 +16,5 @@ export const config = {
 export const endpoints = {
   investigate: `${config.apiURL}/api/investigate`,
   ws: (sessionId: string) => `${config.wsURL}/api/ws/${sessionId}`,
+  wishlist: `${config.apiURL}/api/wishlist`,
 }

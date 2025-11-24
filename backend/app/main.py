@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agent, websocket
+from app.api import agent, websocket, wishlist
 
 app = FastAPI(title="Procurement Fraud Investigation API")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 # Include API routers
 app.include_router(agent.router, prefix="/api", tags=["agent"])
 app.include_router(websocket.router, prefix="/api", tags=["websocket"])
+app.include_router(wishlist.router, prefix="/api", tags=["wishlist"])
 
 
 @app.get("/")

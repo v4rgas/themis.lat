@@ -183,3 +183,21 @@ class SummaryOutput(BaseModel):
             "3) Cross-references between related findings"
         )
     )
+
+
+# Wishlist schemas
+class WishlistCreate(BaseModel):
+    """Input for creating a wishlist entry"""
+    email: str = Field(description="User's email address")
+    reason: str = Field(description="Why the user wants to join Themis")
+
+
+class WishlistResponse(BaseModel):
+    """Response after creating a wishlist entry"""
+    id: int
+    email: str
+    reason: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -1,14 +1,16 @@
 """
 Wishlist API endpoints
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import logging
+from typing import List
 
 from app.database import get_db
 from app.models import Wishlist
 from app.schemas import WishlistCreate, WishlistResponse
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -61,4 +63,44 @@ def create_wishlist_entry(
         raise HTTPException(
             status_code=500,
             detail="Error al procesar tu solicitud"
+        )
+
+
+@router.get("/wishlist", response_model=List[WishlistResponse])
+def list_wishlist_entries(
+    x_api_key: str = Header(..., alias="X-API-Key"),
+    db: Session = Depends(get_db)
+):
+    """
+    List all wishlist entries. Protected by API key.
+
+    Args:
+        x_api_key: API key in X-API-Key header
+        db: Database session
+
+    Returns:
+        List of all wishlist entries ordered by creation date
+
+    Raises:
+        HTTPException: If API key is invalid or database error occurs
+    """
+    # Verify API key
+    if x_api_key != settings.admin_api_key:
+        logger.warning("Invalid API key attempt to access wishlist")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+
+    try:
+        # Fetch all wishlist entries ordered by creation date (newest first)
+        wishlist_entries = db.query(Wishlist).order_by(Wishlist.created_at.desc()).all()
+        logger.info(f"Retrieved {len(wishlist_entries)} wishlist entries")
+        return wishlist_entries
+
+    except Exception as e:
+        logger.error(f"Error retrieving wishlist entries: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error al obtener los datos"
         )

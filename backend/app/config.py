@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     websocket_replay_speed: float = 4.0
 
+    # Admin API key for protected endpoints
+    admin_api_key: str
+
     # Fraud Detection Agent limits
     fraud_detection_max_iterations: int = 80
     ranking_max_iterations: int = 10  # Ranking should be quick - max 3 tool calls

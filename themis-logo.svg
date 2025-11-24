@@ -3,7 +3,7 @@
   <rect width="1000" height="1000" fill="#ffffff"/>
 
   <!-- T Logo Group - scaled up from 80px to 600px (7.5x) and centered -->
-  <g transform="translate(200, 150)">
+  <g transform="translate(200, 200)">
     <!-- Horizontal bar of T -->
     <rect x="60" y="48.75" width="480" height="22.5" fill="#1a1a2e"/>
 
@@ -22,13 +22,4 @@
     <!-- Bottom-center dot -->
     <circle cx="300" cy="540" r="60" fill="#1a1a2e"/>
   </g>
-
-  <!-- Themis Text -->
-  <text x="500" y="880"
-        font-family="system-ui, -apple-system, sans-serif"
-        font-size="120"
-        font-weight="300"
-        letter-spacing="24"
-        fill="#1a1a2e"
-        text-anchor="middle">Themis</text>
 </svg>

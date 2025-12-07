@@ -51,7 +51,7 @@ export DOWNLOADS_DIR
 # Generate list of year-month combinations
 # Years: 2020-2025, Months: 1-12, except 2025-12
 combinations=()
-for year in {2020..2025}; do
+for year in {2007..2019}; do
     for month in {1..12}; do
         # Skip 2025-12
         if [ "$year" -eq 2025 ] && [ "$month" -eq 12 ]; then

@@ -5,6 +5,9 @@ import { endpoints } from "../config/api";
 import { TaskCard } from "../components/TaskCard";
 import { Wishlist } from "../components/Wishlist";
 
+// Toggle this flag to enable/disable the Wishlist gate
+const ENABLE_WISHLIST = false;
+
 interface LogEvent {
   type: "log" | "result" | "error";
   message: string;
@@ -218,7 +221,6 @@ export function Detail() {
     wsRef.current = ws;
   };
 
-  // @ts-expect-error - Kept for future use when wishlist gate is removed
   const startInvestigation = async () => {
     setIsInvestigating(true);
     setLogs([]);
@@ -253,10 +255,21 @@ export function Detail() {
 
   const hasStartedInvestigation = tasks.size > 0 || logs.length > 0;
 
-  // TODO: Remove this wishlist gate once we're ready to launch
-  // TODO: This should show the Summary component instead: <Summary nodeData={nodeData} isInvestigating={isInvestigating} logs={logs} startInvestigation={startInvestigation} />
   if (!hasStartedInvestigation) {
-    return <Wishlist onBack={() => navigate("/explore")} />;
+    // Show Wishlist if enabled, otherwise show Summary
+    if (ENABLE_WISHLIST && Wishlist) {
+      return <Wishlist onBack={() => navigate("/explore")} />;
+    }
+    return (
+      <div className="detail-container">
+        <Summary
+          nodeData={nodeData}
+          isInvestigating={isInvestigating}
+          logs={logs}
+          startInvestigation={startInvestigation}
+        />
+      </div>
+    );
   }
 
   return (
@@ -421,7 +434,6 @@ export function Detail() {
   );
 }
 
-// @ts-expect-error - Kept for future use when wishlist gate is removed
 function Summary({
   nodeData,
   isInvestigating,

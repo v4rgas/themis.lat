@@ -7,6 +7,8 @@ from langchain.tools import tool
 import requests
 import httpx
 from bs4 import BeautifulSoup
+
+from app.config import settings
 from app.tools.read_award_result import extract_qs_from_award_page, fetch_award_modal_html, download_award_attachment_by_row_id
 from app.tools.read_buyer_attachment_doc import get_openrouter_api_key
 from app.utils.document_reader import (

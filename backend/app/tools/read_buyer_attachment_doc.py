@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from langchain.tools import tool
 import httpx
 
+from app.config import settings
 from app.tools.read_supplier_attachments import (
     download_buyer_attachment_by_tender_id_and_row_id as _download_buyer_attachment
 )

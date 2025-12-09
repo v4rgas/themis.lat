@@ -13,7 +13,7 @@ from langchain.agents.structured_output import ToolStrategy
 from app.config import settings
 from app.prompts import fraud_detection_agent
 from app.schemas import FraudDetectionInput, FraudDetectionOutput
-from app.tools.get_plan import get_plan
+from app.tools.get_plan import get_plan, set_openrouter_api_key
 from app.tools.read_buyer_attachments_table import read_buyer_attachments_table
 from app.tools.read_buyer_attachment_doc import read_buyer_attachment_doc
 from app.tools.read_award_result import read_award_result
@@ -77,6 +77,9 @@ class FraudDetectionAgent:
         self.temperature = temperature
         self.max_iterations = max_iterations or settings.fraud_detection_max_iterations
         self.max_execution_time = max_execution_time or settings.fraud_detection_max_execution_time
+
+        # Set the API key for tools that need it (like get_plan)
+        set_openrouter_api_key(openrouter_api_key)
 
         # Initialize model with user's API key
         model = ChatOpenAI(

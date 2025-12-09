@@ -6,6 +6,8 @@ import asyncio
 from datetime import datetime
 import base64
 import httpx
+
+from app.config import settings
 from app.utils.get_tender import TenderResponse
 from app.schemas import RankingInput
 from app.tools.read_supplier_attachments import read_buyer_attachments_table as _read_buyer_attachments_table

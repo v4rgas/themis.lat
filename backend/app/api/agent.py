@@ -9,6 +9,7 @@ import asyncio
 import time
 import logging
 from datetime import datetime
+import httpx
 
 from app.workflow import FraudDetectionWorkflow
 from app.utils.websocket_manager import manager
@@ -18,6 +19,64 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def send_investigation_discord_notification(tender_id: str, session_id: str, is_replay: bool = False):
+    """
+    Send a Discord notification when someone starts an investigation.
+
+    Args:
+        tender_id: The tender ID being investigated
+        session_id: The session ID for tracking
+        is_replay: Whether this is a replay of a previous investigation
+    """
+    if not settings.discord_webhook_url:
+        logger.info("Discord webhook not configured, skipping notification")
+        return
+
+    try:
+        # Build the Mercado Público link
+        mercado_url = f"https://www.mercadopublico.cl/fichaLicitacion.html?idLicitacion={tender_id}"
+
+        embed = {
+            "title": "🔍 New Investigation Started" if not is_replay else "🔄 Investigation Replay",
+            "color": 0x00D166 if not is_replay else 0x5865F2,  # Green for new, blurple for replay
+            "fields": [
+                {
+                    "name": "Tender ID",
+                    "value": f"[{tender_id}]({mercado_url})",
+                    "inline": True
+                },
+                {
+                    "name": "Session ID",
+                    "value": f"`{session_id[:8]}...`",
+                    "inline": True
+                },
+                {
+                    "name": "Type",
+                    "value": "Replay" if is_replay else "New Analysis",
+                    "inline": True
+                }
+            ],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        payload = {
+            "embeds": [embed]
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                settings.discord_webhook_url,
+                json=payload,
+                timeout=10.0
+            )
+            response.raise_for_status()
+            logger.info(f"Discord notification sent for investigation {tender_id}")
+
+    except Exception as e:
+        # Don't fail the request if Discord notification fails
+        logger.error(f"Failed to send Discord notification: {str(e)}")
 
 
 class InvestigationRequest(BaseModel):
@@ -213,10 +272,14 @@ async def start_investigation(
     if has_websocket_messages(request.tender_id):
         # Replay existing messages instead of running workflow
         logger.info(f"Found existing messages for tender {request.tender_id}, starting replay")
+
+        # Send Discord notification for replay
+        await send_investigation_discord_notification(request.tender_id, session_id, is_replay=True)
+
         background_tasks.add_task(
-            replay_websocket_messages, 
-            session_id, 
-            request.tender_id, 
+            replay_websocket_messages,
+            session_id,
+            request.tender_id,
             settings.websocket_replay_speed
         )
         return InvestigationResponse(
@@ -226,6 +289,10 @@ async def start_investigation(
     else:
         # No existing messages, run workflow normally (which will save messages)
         logger.info(f"No existing messages for tender {request.tender_id}, starting new workflow")
+
+        # Send Discord notification for new investigation
+        await send_investigation_discord_notification(request.tender_id, session_id, is_replay=False)
+
         background_tasks.add_task(
             run_workflow_sync,
             session_id,

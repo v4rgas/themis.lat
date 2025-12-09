@@ -4,6 +4,8 @@ Helper function to build RankingInput from TenderResponse and documents
 from typing import Dict, Any, List, Optional
 import asyncio
 from datetime import datetime
+import base64
+import httpx
 from app.utils.get_tender import TenderResponse
 from app.schemas import RankingInput
 from app.tools.read_supplier_attachments import read_buyer_attachments_table as _read_buyer_attachments_table
@@ -12,9 +14,7 @@ from app.utils.websocket_manager import manager
 from app.tools.read_supplier_attachments import (
     download_buyer_attachment_by_tender_id_and_row_id
 )
-from mistralai import Mistral
-from app.config import settings
-import base64
+from app.tools.read_buyer_attachment_doc import get_openrouter_api_key
 from app.utils.document_reader import (
     detect_file_type,
     get_file_extension_from_mime,

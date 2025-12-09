@@ -3,10 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import "./Detail.css";
 import { endpoints } from "../config/api";
 import { TaskCard } from "../components/TaskCard";
-import { Wishlist } from "../components/Wishlist";
-
-// Toggle this flag to enable/disable the Wishlist gate
-const ENABLE_WISHLIST = false;
+import { ApiKeyModal } from "../components/ApiKeyModal";
 
 interface LogEvent {
   type: "log" | "result" | "error";
@@ -42,6 +39,7 @@ export function Detail() {
   const [logs, setLogs] = useState<LogEvent[]>([]);
   const [tasks, setTasks] = useState<Map<string, TaskInfo>>(new Map());
   const [isInvestigating, setIsInvestigating] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const latestLogRef = useRef<HTMLDivElement | null>(null);
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
@@ -221,7 +219,12 @@ export function Detail() {
     wsRef.current = ws;
   };
 
-  const startInvestigation = async () => {
+  const handleAnalyzeClick = () => {
+    setShowApiKeyModal(true);
+  };
+
+  const startInvestigation = async (apiKey: string) => {
+    setShowApiKeyModal(false);
     setIsInvestigating(true);
     setLogs([]);
     setTasks(new Map());
@@ -234,6 +237,7 @@ export function Detail() {
         },
         body: JSON.stringify({
           tender_id: nodeData.CodigoExterno,
+          openrouter_api_key: apiKey,
         }),
       });
 
@@ -255,20 +259,22 @@ export function Detail() {
 
   const hasStartedInvestigation = tasks.size > 0 || logs.length > 0;
 
+  // Show the Summary component when investigation hasn't started
   if (!hasStartedInvestigation) {
-    // Show Wishlist if enabled, otherwise show Summary
-    if (ENABLE_WISHLIST && Wishlist) {
-      return <Wishlist onBack={() => navigate("/explore")} />;
-    }
     return (
-      <div className="detail-container">
+      <>
         <Summary
           nodeData={nodeData}
           isInvestigating={isInvestigating}
           logs={logs}
-          startInvestigation={startInvestigation}
+          onAnalyzeClick={handleAnalyzeClick}
         />
-      </div>
+        <ApiKeyModal
+          isOpen={showApiKeyModal}
+          onClose={() => setShowApiKeyModal(false)}
+          onSubmit={startInvestigation}
+        />
+      </>
     );
   }
 
@@ -438,17 +444,17 @@ function Summary({
   nodeData,
   isInvestigating,
   logs,
-  startInvestigation,
+  onAnalyzeClick,
 }: {
   nodeData: any;
   isInvestigating: boolean;
   logs: LogEvent[];
-  startInvestigation: () => void;
+  onAnalyzeClick: () => void;
 }) {
   const navigate = useNavigate();
 
   return (
-    <div>
+    <div className="detail-container">
       <div className="detail-header">
         <button onClick={() => navigate("/explore")} className="back-button">
           ← Explorar
@@ -552,8 +558,8 @@ function Summary({
 
       {!isInvestigating && logs.length === 0 && (
         <div className="investigation-start">
-          <button onClick={startInvestigation} className="start-button">
-            Iniciar Investigación
+          <button onClick={onAnalyzeClick} className="start-button">
+            Analizar Licitación
           </button>
         </div>
       )}

@@ -53,7 +53,8 @@ class RankingAgent:
 
     def __init__(
         self,
-        model_name: str = "google/gemini-2.5-flash-preview-09-2025:nitro",
+        openrouter_api_key: str,
+        model_name: str = "google/gemini-2.5-flash",
         temperature: float = 0.7,
         max_iterations: int = None,
     ):
@@ -61,7 +62,8 @@ class RankingAgent:
         Initialize the Ranking Agent.
 
         Args:
-            model_name: Anthropic model to use
+            openrouter_api_key: User's OpenRouter API key
+            model_name: Model to use via OpenRouter
             temperature: Temperature for model responses (0.0-1.0)
             max_iterations: Maximum number of tool calls allowed (default from config)
         """
@@ -69,12 +71,12 @@ class RankingAgent:
         self.temperature = temperature
         self.max_iterations = max_iterations or settings.ranking_max_iterations
 
-        # Initialize model
+        # Initialize model with user's API key
         model = ChatOpenAI(
             model=model_name,
             temperature=temperature,
             base_url="https://openrouter.ai/api/v1",
-            api_key=settings.openrouter_api_key,
+            api_key=openrouter_api_key,
         )
 
         # Define tools for risk assessment

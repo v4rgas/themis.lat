@@ -31,6 +31,10 @@ class InvestigationRequest(BaseModel):
         None,
         description="Optional session ID for WebSocket notifications. If not provided, one will be generated."
     )
+    openrouter_api_key: str = Field(
+        ...,
+        description="OpenRouter API key for LLM calls"
+    )
 
 
 class InvestigationResponse(BaseModel):
@@ -117,7 +121,7 @@ def replay_websocket_messages(session_id: str, tender_id: str, replay_speed: flo
         }))
 
 
-def run_workflow_sync(session_id: str, tender_id: str):
+def run_workflow_sync(session_id: str, tender_id: str, openrouter_api_key: str):
     """
     Run the fraud detection workflow synchronously.
 
@@ -127,13 +131,14 @@ def run_workflow_sync(session_id: str, tender_id: str):
     Args:
         session_id: The session ID for WebSocket communication
         tender_id: The tender ID to investigate
+        openrouter_api_key: OpenRouter API key for LLM calls
     """
     try:
         # Register tender_id for message logging
         manager.register_tender_id(session_id, tender_id)
-        
-        # Create workflow instance
-        workflow = FraudDetectionWorkflow()
+
+        # Create workflow instance with user's API key
+        workflow = FraudDetectionWorkflow(openrouter_api_key=openrouter_api_key)
 
         # Run workflow with session_id for streaming
         result = workflow.run(tender_id=tender_id, session_id=session_id)
@@ -221,7 +226,12 @@ async def start_investigation(
     else:
         # No existing messages, run workflow normally (which will save messages)
         logger.info(f"No existing messages for tender {request.tender_id}, starting new workflow")
-        background_tasks.add_task(run_workflow_sync, session_id, request.tender_id)
+        background_tasks.add_task(
+            run_workflow_sync,
+            session_id,
+            request.tender_id,
+            request.openrouter_api_key
+        )
         return InvestigationResponse(
             session_id=session_id,
             message=f"Investigation started. Connect to WebSocket at /ws/{session_id} for real-time updates."

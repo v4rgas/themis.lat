@@ -48,6 +48,7 @@ class WorkflowState(TypedDict):
     # Input
     tender_id: str
     session_id: Optional[str]  # For WebSocket streaming
+    openrouter_api_key: str  # User's OpenRouter API key
 
     # Fetched tender data
     tender_response: TenderResponse
@@ -98,8 +99,9 @@ class FraudDetectionWorkflow:
 
     def __init__(
         self,
-        ranking_model: str = "google/gemini-2.5-flash-preview-09-2025:nitro",
-        detection_model: str = "google/gemini-2.5-flash-preview-09-2025:nitro",
+        openrouter_api_key: str,
+        ranking_model: str = "google/gemini-2.5-flash",
+        detection_model: str = "google/gemini-2.5-flash",
         temperature: float = 0,
         max_iterations: int = None,
         max_execution_time: int = None,
@@ -108,14 +110,18 @@ class FraudDetectionWorkflow:
         Initialize the workflow with agent configurations.
 
         Args:
+            openrouter_api_key: User's OpenRouter API key
             ranking_model: Model for ranking agent
             detection_model: Model for detection agents
             temperature: Temperature for all agents
             max_iterations: Maximum tool calls per investigation (default from config)
             max_execution_time: Maximum execution time per investigation in seconds (default from config)
         """
+        self.openrouter_api_key = openrouter_api_key
         self.ranking_agent = RankingAgent(
-            model_name=ranking_model, temperature=temperature
+            model_name=ranking_model,
+            temperature=temperature,
+            openrouter_api_key=openrouter_api_key,
         )
         self.detection_model = detection_model
         self.temperature = temperature
@@ -452,12 +458,13 @@ Return ONLY the IDs of feasible tasks. Focus on filtering OUT impossible tasks.
         )
 
         try:
-            # Create fraud detection agent
+            # Create fraud detection agent with user's API key
             agent = FraudDetectionAgent(
                 model_name=self.detection_model,
                 temperature=self.temperature,
                 max_iterations=self.max_iterations,
                 max_execution_time=self.max_execution_time,
+                openrouter_api_key=self.openrouter_api_key,
             )
 
             # Prepare message for investigation
@@ -695,6 +702,7 @@ Please investigate this task systematically and report your findings.
             summary_agent = SummaryAgent(
                 model_name=self.detection_model,
                 temperature=0.3,  # Lower temperature for more focused analysis
+                openrouter_api_key=self.openrouter_api_key,
             )
             summary_output: SummaryOutput = summary_agent.run(
                 task_results=tasks_by_id,

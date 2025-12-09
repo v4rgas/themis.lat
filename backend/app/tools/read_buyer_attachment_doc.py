@@ -4,20 +4,31 @@ import tempfile
 import time
 from pydantic import BaseModel, Field
 from langchain.tools import tool
-
-from mistralai import Mistral
-from mistralai.models import SDKError
+import httpx
 
 from app.tools.read_supplier_attachments import (
     download_buyer_attachment_by_tender_id_and_row_id as _download_buyer_attachment
 )
-from app.config import settings
 from app.utils.document_reader import (
     detect_file_type,
     get_file_extension_from_mime,
     extract_text_locally
 )
 from app.utils.cache_manager import get_cache_manager
+
+# Global variable to store the API key (set by workflow before tool execution)
+_openrouter_api_key: str | None = None
+
+
+def set_openrouter_api_key(api_key: str):
+    """Set the OpenRouter API key for OCR calls."""
+    global _openrouter_api_key
+    _openrouter_api_key = api_key
+
+
+def get_openrouter_api_key() -> str | None:
+    """Get the current OpenRouter API key."""
+    return _openrouter_api_key
 
 
 class ReadBuyerAttachmentDocInput(BaseModel):

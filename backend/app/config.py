@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     # Discord webhook for notifications
     discord_webhook_url: str | None = None
 
+    # Mistral API key for OCR
+    mistral_api_key: str | None = None
+
     # Fraud Detection Agent limits
     fraud_detection_max_iterations: int = 80
     ranking_max_iterations: int = 10  # Ranking should be quick - max 3 tool calls

@@ -1,56 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
-  <!-- Background -->
   <rect width="1200" height="630" fill="#1a1a2e"/>
 
-  <!-- Subtle grid pattern -->
-  <defs>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#16213e" stroke-width="1"/>
-    </pattern>
-  </defs>
-  <rect width="1200" height="630" fill="url(#grid)" opacity="0.5"/>
-
-  <!-- Logo (T with dots) -->
-  <g transform="translate(100, 180)">
-    <g fill="#fff">
-      <!-- Top left dot -->
-      <circle cx="0" cy="0" r="20"/>
-      <!-- Top right dot -->
-      <circle cx="160" cy="0" r="20"/>
-      <!-- Center top dot -->
-      <circle cx="80" cy="0" r="20"/>
-      <!-- Horizontal bar -->
-      <rect x="-5" y="16" width="170" height="8"/>
-      <!-- Vertical bar -->
-      <rect x="76" y="16" width="8" height="160"/>
-      <!-- Bottom center dot -->
-      <circle cx="80" cy="190" r="20"/>
-    </g>
+  <!-- T Logo centered - matching themis-logo.svg structure -->
+  <g fill="#fff" transform="translate(360, 115) scale(0.8)">
+    <!-- Horizontal bar -->
+    <rect x="60" y="48.75" width="480" height="22.5"/>
+    <!-- Vertical bar -->
+    <rect x="288.75" y="48.75" width="22.5" height="491.25"/>
+    <!-- Top-left dot -->
+    <circle cx="60" cy="60" r="60"/>
+    <!-- Top-right dot -->
+    <circle cx="540" cy="60" r="60"/>
+    <!-- Top-center dot -->
+    <circle cx="300" cy="60" r="60"/>
+    <!-- Bottom-center dot -->
+    <circle cx="300" cy="540" r="60"/>
   </g>
-
-  <!-- Title: Themis -->
-  <text x="340" y="300" font-family="system-ui, -apple-system, sans-serif" font-size="120" font-weight="300" fill="#fff" letter-spacing="0.1em">Themis</text>
-
-  <!-- Tagline -->
-  <text x="340" y="370" font-family="system-ui, -apple-system, sans-serif" font-size="28" fill="#a0a0a0">Análisis de Licitaciones Públicas</text>
-
-  <!-- Secondary tagline -->
-  <text x="340" y="420" font-family="system-ui, -apple-system, sans-serif" font-size="22" fill="#666">Transparencia y datos abiertos para Chile</text>
-
-  <!-- Decorative elements - audit checkmarks -->
-  <g transform="translate(950, 450)" fill="none" stroke="#27ae60" stroke-width="3">
-    <circle cx="0" cy="0" r="25" opacity="0.3"/>
-    <path d="M-10 0 L-3 7 L12 -8" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-  <g transform="translate(1030, 420)" fill="none" stroke="#27ae60" stroke-width="3">
-    <circle cx="0" cy="0" r="25" opacity="0.3"/>
-    <path d="M-10 0 L-3 7 L12 -8" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-  <g transform="translate(1090, 480)" fill="none" stroke="#27ae60" stroke-width="3">
-    <circle cx="0" cy="0" r="25" opacity="0.3"/>
-    <path d="M-10 0 L-3 7 L12 -8" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-
-  <!-- URL footer -->
-  <text x="100" y="580" font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="#666">themis.cl</text>
 </svg>
